@@ -14,6 +14,7 @@ class ForumBot(Client):
         Client.__init__(self)
         self.config = config
         self.commands = []
+        self.informed = set()
         for k, v in ForumBot.__dict__.items():
             if hasattr(v, 'command'):
                 self.commands.append(k)
@@ -30,9 +31,27 @@ class ForumBot(Client):
         else:
             return 'user'
 
+    def get_server(self):
+         return utils.find(lambda s: s.id == self.config['server'],
+                           self.servers)
+
     def on_message(self, msg):
         if msg.author == self.user:
             return
+
+        elif msg.channel.is_private:
+            if msg.author in self.get_server().members:
+                token = msg.content.strip()
+                if len(token) == 16:
+                    self.try_token(msg.author, token)
+                else:
+                    self.send_message(msg.channel, "That does not look like "
+                                      "an access token")
+            else:
+                if msg.channel.id not in self.informed:
+                    self.send_message(msg.channel, "I am a bot and I don't "
+                                      "serve you.")
+                    self.informed.update([msg.channel.id])
 
         else:
             if not msg.content.startswith(self.config['trigger']): return
@@ -60,6 +79,30 @@ class ForumBot(Client):
             elif role != 'ignore' and self.config['noisy_deny']:
                 self.send_message(msg.channel, "You do not have permission to "
                                   "use this command.")
+
+    def try_token(self, user, token):
+        with connection.cursor() as cursor:
+            sql = ("SELECT NOW() < TIMESTAMPADD(MINUTE, %s, issued) AS valid, "
+                   "user_id FROM discord_tokens WHERE token = %s")
+            cursor.execute(sql, (self.config['token_timeout'], token))
+            if cursor.rowcount == 1:
+                row = cursor.fetchone()
+                valid = bool(row['valid'])
+                user_id = row['user_id']
+
+                # Invalidate token
+                sql = "DELETE FROM discord_tokens WHERE token = %s"
+                cursor.execute(sql, (token,))
+                connection.commit()
+            else:
+                valid = False
+
+
+        if valid:
+            self.send_message(user, "Your token was valid!")
+            # add role to user, revoke old user, etc
+        else:
+            self.send_message(user, "This token is not valid")
 
     @command
     def help(self, message, argument):
