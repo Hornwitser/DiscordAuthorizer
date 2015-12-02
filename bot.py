@@ -36,6 +36,11 @@ class ForumBot(Client):
         return utils.find(lambda s: s.id == self.config['server'],
                           self.servers)
 
+    @property
+    def auth_role(self):
+        return utils.find(lambda r: r.id == self.config['role'],
+                          self.bot_server.roles)
+
     def on_message(self, msg):
         if msg.author == self.user:
             return
@@ -81,6 +86,15 @@ class ForumBot(Client):
                 self.send_message(msg.channel, "You do not have permission to "
                                   "use this command.")
 
+    def on_member_join(self, member):
+        with connection.cursor() as cursor:
+            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+            cursor.execute(sql, (member.id,))
+            if cursor.rowcount:
+                # Query database and check for additional roles to set
+                self.add_roles(member, self.auth_role)
+            connection.rollback()
+
     def try_token(self, user, token):
         with connection.cursor() as cursor:
             sql = ("SELECT NOW() < TIMESTAMPADD(MINUTE, %s, issued) AS valid, "
@@ -95,15 +109,51 @@ class ForumBot(Client):
                 sql = "DELETE FROM discord_tokens WHERE token = %s"
                 cursor.execute(sql, (token,))
                 connection.commit()
+
+                if not valid:
+                    self.send_message(user, "This token has expired.")
+                    return
             else:
-                valid = False
+                self.send_message(user, "This token is not valid.")
+                connection.rollback()
+                return
 
+            # Check if this discord user is already linked to another accont
+            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+            cursor.execute(sql, (user.id,))
+            if cursor.rowcount:
+                username = cursor.fetchone()['username']
+                self.send_message(user, "This Discord account is already "
+                                  "linked to '{}'.".format(username))
+                connection.rollback()
+                return
 
-        if valid:
-            self.send_message(user, "Your token was valid!")
-            # add role to user, revoke old user, etc
-        else:
-            self.send_message(user, "This token is not valid.")
+            # Check if another discord user is already linked to this account
+            sql = "SELECT discord_id FROM xf_users WHERE user_id = %s"
+            cursor.execute(sql, (user_id,))
+            if cursor.rowcount:
+                self.revoke_id(cursor.fetchone()['discord_id'])
+
+            # Link this discord user to the account indicated by the token
+            sql = "UPDATE xf_users SET discord_id = %s WHERE user_id = %s"
+            cursor.execute(sql, (user.id, user_id))
+            connection.commit()
+
+        self.authorize_id(user.id)
+        self.send_message(user, "Authorisation successful.")
+
+    def revoke_id(self, user_id):
+        """Revoke the authorization given to a user"""
+        user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
+        if user is not None:
+            # Remove additional roles that may have been granted
+            self.remove_roles(user, self.auth_role)
+
+    def authorize_id(self, user_id):
+        user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
+        if user is not None:
+            # Query database and check for additional roles to set
+            self.add_roles(user, self.auth_role)
 
     @command
     def help(self, message, argument):
