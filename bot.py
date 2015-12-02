@@ -171,6 +171,31 @@ class ForumBot(Client):
             text += "{} {}\n".format(command, getattr(self, command).__doc__)
         self.send_message(message.channel, text)
 
+    @command
+    def whois(self, message, argument):
+        matches = []
+        for member in message.channel.server.members:
+            if member.name == argument:
+                matches.append(member)
+
+        if matches:
+            with connection.cursor() as cursor:
+                names = []
+                for member in matches:
+                    sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+                    cursor.execute(sql, (member.id,))
+                    if cursor.rowcount:
+                        username = cursor.fetchone()['username']
+                        names.append(username)
+                    else:
+                        names.append('*User not found*')
+            connection.rollback()
+            msg = '\n'.join(["{} is {}.".format(m.name, u)
+                                 for m, u in zip(matches, names)])
+            self.send_message(message.channel, msg)
+        else:
+            self.send_message(message.channel, "No match for '{}'."
+                              "".format(argument))
 
     def add_field(self, field, field_type, channel, argument):
         if argument is None:
