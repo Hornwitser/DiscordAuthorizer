@@ -75,7 +75,7 @@ class ForumBot(Client):
             if role == 'master':
                 func(msg, arg)
 
-            elif msg.channel.server.id not in config['server']:
+            elif msg.channel.server.id != config['server']:
                 return
 
             elif (role == 'admin' and cmd in self.config['admin_commands']
