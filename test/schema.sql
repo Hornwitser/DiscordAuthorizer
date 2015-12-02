@@ -1,8 +1,8 @@
 -- MySQL Xenoforo mock up database
 CREATE TABLE xf_users (
     user_id INT(10) KEY AUTO_INCREMENT,
-    username VARCHAR(10) NOT NULL UNIQUE,
-    discord_id VARCHAR(24) NULL
+    username VARCHAR(35) NOT NULL UNIQUE,
+    discord_id VARCHAR(24) NULL UNIQUE
 );
 
 -- Token storage
