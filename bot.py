@@ -47,7 +47,7 @@ class ForumBot(Client):
                     self.try_token(msg.author, token)
                 else:
                     self.send_message(msg.channel, "That does not look like "
-                                      "an access token")
+                                      "an access token.")
             else:
                 if msg.channel.id not in self.informed:
                     self.send_message(msg.channel, "I am a bot and I don't "
@@ -103,7 +103,7 @@ class ForumBot(Client):
             self.send_message(user, "Your token was valid!")
             # add role to user, revoke old user, etc
         else:
-            self.send_message(user, "This token is not valid")
+            self.send_message(user, "This token is not valid.")
 
     @command
     def help(self, message, argument):
@@ -124,7 +124,7 @@ class ForumBot(Client):
 
     def add_field(self, field, field_type, channel, argument):
         if argument is None:
-            self.send_message(channel, "Error: missing argument")
+            self.send_message(channel, "Error: missing argument.")
 
         elif field_type == 'user':
             users = [u.id for u in argument]
@@ -140,7 +140,7 @@ class ForumBot(Client):
             if len(commands):
                 self.config[field].update(commands)
                 cmds = ", ".join(commands)
-                self.send_message(channel, "Added commands {}".format(cmds))
+                self.send_message(channel, "Added commands {}.".format(cmds))
             else:
                 self.send_message(channel, "No matching commands to add.")
 
@@ -160,7 +160,7 @@ class ForumBot(Client):
 
     def remove_field(self, field, field_type, channel, argument):
         if argument is None:
-            self.send_message(channel, "Error: missing argument")
+            self.send_message(channel, "Error: missing argument.")
 
         elif field_type == 'user':
             users = [u.id for u in argument]
@@ -243,7 +243,7 @@ class ForumBot(Client):
             self.send_message(message.channel, eval(argument))
         except Exception as e:
             self.send_message(message.channel,
-                              '{} {}'.format(type(e).__name__, e))
+                              '{}: {}.'.format(type(e).__name__, e))
 
 
 def write_config(config):
