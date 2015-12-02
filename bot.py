@@ -1,4 +1,9 @@
+import atexit
+import json
 import logging
+import os
+import socketserver
+from threading import Thread
 
 from discord import Client, utils
 import pymysql
@@ -15,9 +20,23 @@ class ForumBot(Client):
         self.config = config
         self.commands = []
         self.informed = set()
+        self.exception = None
         for k, v in ForumBot.__dict__.items():
             if hasattr(v, 'command'):
                 self.commands.append(k)
+
+    # This is a rather hackish way to get arround the problem of there
+    # being no sane way to propogate exception from a thread to the
+    # main thread.
+    def on_raise_exception(self, exception):
+        self.exception = exception
+
+    # The handle variant is internal to Client and should probably not
+    # be used here.  This is also a rather dirty hack to insert an
+    # action to the thread that handles this bot.
+    def handle_socket_response(self, response):
+        if self.exception is not None:
+            raise self.exception
 
     def get_role(self, member):
         if member.id in self.config['masters']:
@@ -148,6 +167,9 @@ class ForumBot(Client):
         if user is not None:
             # Remove additional roles that may have been granted
             self.remove_roles(user, self.auth_role)
+
+    def on_revoke_id(self, user_id):
+        self.revoke_id(user_id)
 
     def authorize_id(self, user_id):
         user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
@@ -320,6 +342,30 @@ class ForumBot(Client):
             self.send_message(message.channel,
                               '{}: {}.'.format(type(e).__name__, e))
 
+class UnixHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        request = json.loads(self.request[0].decode('utf-8'))
+        if request['action'] == 'revoke':
+            self.server.bot.dispatch('revoke_id', request['user_id'])
+        else:
+            logging.warning("Unkown request '{}'.".format(json.dumps(request)))
+
+def run_server(bot, config):
+    try:
+        server = socketserver.UnixDatagramServer(config['socket'], UnixHandler)
+        server.bot = bot
+        atexit.register(os.unlink, config['socket'])
+        server.serve_forever()
+
+    except Exception:
+        logging.exception('Exception occured while running signalling server')
+
+    except BaseException as e:
+        bot.dispatch('raise_exception', e)
+
+    # We should not reach this point
+    logging.error('Signaling server closed!')
+
 
 def write_config(config):
     config_file = open('config.py', 'w')
@@ -340,6 +386,10 @@ if __name__ == '__main__':
 
     bot = ForumBot(config)
     bot.login(config['bot_user'], config['bot_password'])
+
+    server_thread = Thread(target=run_server, args=(bot, config), daemon=True)
+    server_thread.start()
+
     try:
         bot.run()
     finally:
