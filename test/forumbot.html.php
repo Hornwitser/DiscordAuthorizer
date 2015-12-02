@@ -31,13 +31,14 @@ if (isset($_GET['create'])) {
         $user_id = $mysqli->insert_id;
         $logged_in = true;
         $token = null;
+        $discord_id = null;
     }
 
 } else if (isset($_GET['username'])) {
     $name = $mysqli->real_escape_string($_GET['username']);
     $res = $mysqli->query(
         "SELECT x.user_id, NOW() < TIMESTAMPADD(MINUTE, $expire, issued), ".
-        "token FROM xf_users AS x LEFT JOIN discord_tokens AS d ".
+        "token, discord_id FROM xf_users AS x LEFT JOIN discord_tokens AS d ".
         "ON x.user_id = d.user_id WHERE username = '$name'"
     );
 
@@ -48,9 +49,21 @@ if (isset($_GET['create'])) {
         $error = "No user named $_GET[username]";
         $logged_in = false;
     } else {
-        list($user_id, $valid, $token) = $res->fetch_row();
+        list($user_id, $valid, $token, $discord_id) = $res->fetch_row();
         $logged_in = true;
-        if ($valid !== '1' && isset($_GET['token'])) {
+        if (isset($_GET['revoke'])) {
+            $res = $mysqli->query(
+                "UPDATE xf_users SET discord_id = NULL ".
+                "WHERE user_id = $user_id"
+            );
+
+            if (!$res) {
+                $error = $mysqli->error;
+            } else {
+                $discord_id = null;
+            }
+
+        } else if ($valid !== '1' && isset($_GET['token'])) {
             /* If you're using any of this code in your website you
                deserve to get pwned.  The following token generation
                code is not safe for use outside of a testing setup
@@ -107,11 +120,23 @@ if (!$logged_in) { ?>
         <form action="forumbot" method="GET">
             <input type="hidden" name="username" value="<?=html($_GET['username'])?>">
             <input type="submit" name="token" value="Generate token">
+<?php
+        if ($discord_id !== null) { ?>
+            <input type="submit" name="revoke" value="Revoke Discord Account">
+<?php
+        } ?>
         </form>
 <?php
     } else { ?>
         <p>Your token is: <?=$token?>
 <?php
+        if ($discord_id !== null) { ?>
+        <form action="forumbot" method="GET">
+            <input type="hidden" name="username" value="<?=html($_GET['username'])?>">
+            <input type="submit" name="revoke" value="Revoke Discord Account">
+        </form>
+<?php
+        }
     }
 } ?>
     </body>
