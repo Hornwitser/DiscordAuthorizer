@@ -31,16 +31,17 @@ class ForumBot(Client):
         else:
             return 'user'
 
-    def get_server(self):
-         return utils.find(lambda s: s.id == self.config['server'],
-                           self.servers)
+    @property
+    def bot_server(self):
+        return utils.find(lambda s: s.id == self.config['server'],
+                          self.servers)
 
     def on_message(self, msg):
         if msg.author == self.user:
             return
 
         elif msg.channel.is_private:
-            if msg.author in self.get_server().members:
+            if msg.author in self.bot_server.members:
                 token = msg.content.strip()
                 if len(token) == 16:
                     self.try_token(msg.author, token)
