@@ -161,6 +161,44 @@ class ForumBot(Client):
         self.authorize_id(user.id)
         self.send_message(user, "Authorisation successful.")
 
+    def sync_database(self):
+        if not self.is_logged_in:
+            return
+
+        with connection.cursor() as cursor:
+            sql = ("SELECT discord_id FROM xf_users "
+                   "WHERE discord_id IS NOT NULL")
+            cursor.execute(sql)
+            authorized_ids = {r['discord_id'] for r in cursor.fetchall()}
+
+        connection.rollback()
+
+        changes = 0
+        auth_role = self.auth_role
+        for member in self.bot_server.members:
+            if member.id in authorized_ids:
+                if auth_role not in member.roles:
+                    self.add_roles(member, auth_role)
+                    changes += 1
+
+            else:
+                if auth_role in member.roles:
+                    self.remove_roles(member, auth_role)
+                    changes += 1
+
+        return changes
+
+    @command
+    def sync(self, message, argument):
+        """- Trigger a database syncronisation"""
+        changes = self.sync_database()
+        if changes:
+            msg = "{} user{} updated.".format(changes, 's'*(changes != 1))
+        else:
+            msg = "No changes."
+
+        self.send_message(message.channel, msg)
+
     def revoke_id(self, user_id):
         """Revoke the authorization given to a user"""
         user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
