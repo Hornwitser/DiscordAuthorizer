@@ -3,10 +3,12 @@ import json
 import logging
 import os
 from socketserver import UnixDatagramServer, BaseRequestHandler
-from threading import Thread, Event
+from threading import Thread
 
 from discord import Client, utils
 import pymysql
+
+from utils import PeriodicTimer
 
 
 def command(func):
@@ -24,6 +26,10 @@ class ForumBot(Client):
         for k, v in ForumBot.__dict__.items():
             if hasattr(v, 'command'):
                 self.commands.append(k)
+
+        self.sync_timer = PeriodicTimer(config['db_sync_interval'],
+                                        self.dispatch, args=('sync_database',))
+        self.sync_timer.start()
 
     # This is a rather hackish way to get arround the problem of there
     # being no sane way to propogate exception from a thread to the
@@ -187,6 +193,9 @@ class ForumBot(Client):
                     changes += 1
 
         return changes
+
+    def on_sync_database(self):
+        self.sync_database()
 
     @command
     def sync(self, message, argument):
