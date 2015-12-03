@@ -2,8 +2,8 @@ import atexit
 import json
 import logging
 import os
-import socketserver
-from threading import Thread
+from socketserver import UnixDatagramServer, BaseRequestHandler
+from threading import Thread, Event
 
 from discord import Client, utils
 import pymysql
@@ -342,7 +342,7 @@ class ForumBot(Client):
             self.send_message(message.channel,
                               '{}: {}.'.format(type(e).__name__, e))
 
-class UnixHandler(socketserver.BaseRequestHandler):
+class DatagramHandler(BaseRequestHandler):
     def handle(self):
         request = json.loads(self.request[0].decode('utf-8'))
         if request['action'] == 'revoke':
@@ -350,22 +350,27 @@ class UnixHandler(socketserver.BaseRequestHandler):
         else:
             logging.warning("Unkown request '{}'.".format(json.dumps(request)))
 
-def run_server(bot, config):
-    try:
-        server = socketserver.UnixDatagramServer(config['socket'], UnixHandler)
-        server.bot = bot
-        atexit.register(os.unlink, config['socket'])
-        server.serve_forever()
+class SocketServer(Thread):
+    def __init__(self, bot, config):
+        Thread.__init__(self, daemon=True)
+        self.bot = bot
+        self.config = config
 
-    except Exception:
-        logging.exception('Exception occured while running signalling server')
+    def run(self):
+        try:
+            server = UnixDatagramServer(self.config['socket'], DatagramHandler)
+            server.bot = self.bot
+            atexit.register(os.unlink, self.config['socket'])
+            server.serve_forever()
 
-    except BaseException as e:
-        bot.dispatch('raise_exception', e)
+        except Exception:
+            logging.exception('Exception occured while running SocketServer')
 
-    # We should not reach this point
-    logging.error('Signaling server closed!')
+        except BaseException as e:
+            self.bot.dispatch('raise_exception', e)
 
+        # We should not normaly reach this point
+        logging.error('SocketServer closed!')
 
 def write_config(config):
     config_file = open('config.py', 'w')
@@ -387,8 +392,8 @@ if __name__ == '__main__':
     bot = ForumBot(config)
     bot.login(config['bot_user'], config['bot_password'])
 
-    server_thread = Thread(target=run_server, args=(bot, config), daemon=True)
-    server_thread.start()
+    server = SocketServer(bot, config)
+    server.start()
 
     try:
         bot.run()
