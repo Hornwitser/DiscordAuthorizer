@@ -1,31 +1,25 @@
 import atexit
+from inspect import signature
 import json
 import logging
 import os
 from socketserver import UnixDatagramServer, BaseRequestHandler
 from threading import Thread
 
-from discord import Client, utils
+from discord import Channel, Client, Member, Role, Server, User, utils
 import pymysql
 
 from utils import PeriodicTimer
-
-
-def command(func):
-    func.command = None
-    return func
+from cmdsys import command, is_command, get_commands, invoke_command, split
+from cmdsys import convert
 
 
 class ForumBot(Client):
     def __init__(self, config):
         Client.__init__(self)
         self.config = config
-        self.commands = []
         self.informed = set()
         self.exception = None
-        for k, v in ForumBot.__dict__.items():
-            if hasattr(v, 'command'):
-                self.commands.append(k)
 
         self.sync_timer = PeriodicTimer(config['db_sync_interval'],
                                         self.dispatch, args=('sync_database',))
@@ -66,6 +60,23 @@ class ForumBot(Client):
         return utils.find(lambda r: r.id == self.config['role'],
                           self.bot_server.roles)
 
+    def resolve_permission(self, server, role, cmd):
+        if role == 'master':
+            return 'allow'
+
+        elif server.id != self.config['server']:
+            return 'ignore'
+
+        elif (role == 'admin' and cmd in self.config['admin_commands']
+              or role == 'user' and cmd in self.config['user_commands']):
+            return 'allow'
+
+        elif role != 'ignore' and self.config['noisy_deny']:
+            return 'deny'
+
+        else:
+            return 'ignore'
+
     def on_message(self, msg):
         if msg.author == self.user:
             return
@@ -85,29 +96,28 @@ class ForumBot(Client):
                     self.informed.update([msg.channel.id])
 
         else:
-            if not msg.content.startswith(self.config['trigger']): return
-
-            line = msg.content[len(self.config['trigger']):]
-            if ' ' in line:
-                cmd, arg = line.split(' ', 1)
-            else:
-                cmd, arg = line, None
-
-            if cmd not in self.commands: return
-            func = getattr(self, cmd)
-
-            role = self.get_role(msg.author)
-            if role == 'master':
-                func(msg, arg)
-
-            elif msg.channel.server.id != config['server']:
+            if not msg.content.startswith(self.config['trigger']):
                 return
+            line = msg.content[len(self.config['trigger']):]
+            parts = split(line)
+            if not parts:
+                return
+            cmd, args = parts[0], parts[1:]
+            func = getattr(self, cmd, None)
+            if not is_command(func):
+                return
+            role = self.get_role(msg.author)
+            action = self.resolve_permission(msg.server, role, cmd)
+            if action == 'allow':
+                try:
+                    response = invoke_command(func, msg, args)
+                except Exception as e:
+                    self.send_message(msg.channel, "Error: {}".format(e))
+                else:
+                    if response is not None:
+                        self.send_message(msg.channel, response)
 
-            elif (role == 'admin' and cmd in self.config['admin_commands']
-                  or role == 'user' and cmd in self.config['user_commands']):
-                func(msg, arg)
-
-            elif role != 'ignore' and self.config['noisy_deny']:
+            elif action == 'deny':
                 self.send_message(msg.channel, "You do not have permission to "
                                   "use this command.")
 
@@ -198,15 +208,13 @@ class ForumBot(Client):
         self.sync_database()
 
     @command
-    def sync(self, message, argument):
-        """- Trigger a database syncronisation"""
+    def sync(self):
+        """Trigger a database syncronisation"""
         changes = self.sync_database()
         if changes:
-            msg = "{} user{} updated.".format(changes, 's'*(changes != 1))
+            return "{} user{} updated.".format(changes, 's'*(changes != 1))
         else:
-            msg = "No changes."
-
-        self.send_message(message.channel, msg)
+            return "No changes."
 
     def revoke_id(self, user_id):
         """Revoke the authorization given to a user"""
@@ -225,11 +233,11 @@ class ForumBot(Client):
             self.add_roles(user, self.auth_role)
 
     @command
-    def help(self, message, argument):
-        """- Show this help text."""
-        role = self.get_role(message.author)
+    def help(self, what: str=None, *,  author: User):
+        """Show this help text."""
+        role = self.get_role(author)
         if role == 'master':
-            commands = self.commands
+            commands = get_commands(self)
         elif role == 'admin':
             commands = self.config['admin_commands']
         elif role == 'user':
@@ -237,157 +245,128 @@ class ForumBot(Client):
 
         text = "Available commands:\n"
         for command in sorted(commands):
-            text += "{} {}\n".format(command, getattr(self, command).__doc__)
-        self.send_message(message.channel, text)
+            params = []
+            for param in signature(getattr(self, command)).parameters.values():
+                if (param.kind != param.POSITIONAL_OR_KEYWORD
+                        and param.kind != param.VAR_POSITIONAL):
+                    continue
+                optional = '...' if param.kind == param.VAR_POSITIONAL else ''
+                if param.default is param.empty:
+                    fmt = '{{{{{{}}{}}}}} '.format(optional)
+                else:
+                    fmt = '[{{}}{}] '.format(optional)
+                if param.annotation is not param.empty:
+                    params.append(fmt.format(param.annotation.__name__))
+                else:
+                    params.append(fmt.format(param.name))
+
+            params = ''.join(params)
+            doc = getattr(self, command).__doc__
+            trigger = self.config['trigger']
+            text += "{}{} {}- {}\n".format(trigger, command, params, doc)
+
+        return text
 
     @command
-    def whois(self, message, argument):
-        matches = []
-        for member in message.channel.server.members:
-            if member.name == argument:
-                matches.append(member)
+    def whois(self, who: Member):
+        """Tell who a user is."""
+        with connection.cursor() as cursor:
+            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+            cursor.execute(sql, (who.id,))
+            if cursor.rowcount:
+                username = cursor.fetchone()['username']
+            else:
+                username = "*not registered*"
 
-        if matches:
-            with connection.cursor() as cursor:
-                names = []
-                for member in matches:
-                    sql = "SELECT username FROM xf_users WHERE discord_id = %s"
-                    cursor.execute(sql, (member.id,))
-                    if cursor.rowcount:
-                        username = cursor.fetchone()['username']
-                        names.append(username)
-                    else:
-                        names.append('*User not found*')
-            connection.rollback()
-            msg = '\n'.join(["{} is {}.".format(m.name, u)
-                                 for m, u in zip(matches, names)])
-            self.send_message(message.channel, msg)
+        connection.rollback()
+        return "{} is {}".format(who.name, username)
+
+    properties = {
+        "admins": {
+            "type": set,
+            "convert": Member,
+            "key": lambda u: u.id,
+        },
+        "admin_roles": {
+            "type": set,
+            "convert": Role,
+            "key": lambda u: u.id,
+        },
+        "user_commands": {
+            "type": set,
+            "check": "command",
+        },
+        "admin_commands": {
+            "type": set,
+            "check": "command",
+        }
+    }
+
+    @command
+    def add(self, prop: str, *values, server: Server):
+        """Add items to a property"""
+        if prop not in self.properties:
+            return "{} is not a property".format(prop)
+
+        desc = self.properties[prop]
+        if desc['type'] != set:
+            return "{} is not an addable property".format(prop)
+
+        additions = set()
+        for value in values:
+            if 'check' in desc:
+                if desc['check'] == 'command':
+                    if not is_command(getattr(self, value, None)):
+                        raise ValueError("{} is not a command.".format(value))
+                else:
+                    raise TypeError("Uknown check '{}'.".format(desc['check']))
+            if 'convert' in desc:
+                value = convert(server, 'value', desc['convert'], value)
+            if 'key' in desc:
+                value = desc['key'](value)
+            additions.add(value)
+
+        self.config[prop].update(additions)
+
+        return "Added ({}) to {}.".format(", ".join(additions), prop)
+
+    @command
+    def remove(self, prop: str, *values, server: Server):
+        """Remove items from a property"""
+        if prop not in self.properties:
+            return "{} is not a property".format(prop)
+
+        desc = self.properties[prop]
+        if desc['type'] != set:
+            return "{} is not an removable property".format(prop)
+
+        removals = set()
+        for value in values:
+            if 'convert' in desc:
+                value = convert(server, 'value', desc['convert'], value)
+            if 'key' in desc:
+                value = desc['key'](value)
+            removals.add(value)
+
+        self.config[prop].difference_update(removals)
+
+        return "Removed ({}) from {}.".format(", ".join(removals), prop)
+
+    @command
+    def show(self, prop: str):
+        """Show a property"""
+        if prop not in self.properties:
+            return "{} is not a property".format(prop)
         else:
-            self.send_message(message.channel, "No match for '{}'."
-                              "".format(argument))
-
-    def add_field(self, field, field_type, channel, argument):
-        if argument is None:
-            self.send_message(channel, "Error: missing argument.")
-
-        elif field_type == 'user':
-            users = [u.id for u in argument]
-            if len(users):
-                self.config[field].update(users)
-                names = ', '.join([u.name for u in argument])
-                self.send_message(channel, "Added users {}.".format(names))
-            else:
-                self.send_message(channel, "No users mentioned to add.")
-
-        elif field_type == 'command':
-            commands = set(argument.split(' ')).intersection(self.commands)
-            if len(commands):
-                self.config[field].update(commands)
-                cmds = ", ".join(commands)
-                self.send_message(channel, "Added commands {}.".format(cmds))
-            else:
-                self.send_message(channel, "No matching commands to add.")
-
-        elif field_type == 'role':
-            roles = channel.server.roles
-            name = argument.lower()
-            matching_roles = [r for r in roles if name in r.name.lower()]
-            if len(matching_roles) == 1:
-                self.config[field].update([matching_roles[0].id])
-                name = matching_roles[0].name
-                self.send_message(channel, "Added role {}.".format(name))
-            elif len(matching_roles) == 0:
-                self.send_message(channel, "No roles matched {}.".format(name))
-            else:
-                names = ', '.join([r.name for r in matching_roles])
-                self.send_message(channel, "Which one? {}.".format(names))
-
-    def remove_field(self, field, field_type, channel, argument):
-        if argument is None:
-            self.send_message(channel, "Error: missing argument.")
-
-        elif field_type == 'user':
-            users = [u.id for u in argument]
-            if len(users):
-                self.config[field].difference_update(users)
-                names = ', '.join([u.name for u in argument])
-                self.send_message(channel, "Removed users {}.".format(names))
-            else:
-                self.send_message(channel, "No users mentioned to remove.")
-
-        elif field_type == 'command':
-            commands = set(argument.split(' ')).intersection(self.commands)
-            if len(commands):
-                self.config[field].difference_update(commands)
-                cmds = ", ".join(commands)
-                self.send_message(channel, "Removed commands {}.".format(cmds))
-            else:
-                self.send_message(channel, "No matching commands to remove.")
-
-        elif field_type == 'role':
-            roles = channel.server.roles
-            name = argument.lower()
-            matching_roles = [r for r in roles if name in r.name.lower()]
-            if len(matching_roles) == 1:
-                self.config[field].difference_update([matching_roles[0].id])
-                name = matching_roles[0].name
-                self.send_message(channel, "Removed role {}.".format(name))
-            elif len(matching_roles) == 0:
-                self.send_message(channel, "No roles matched {}.".format(name))
-            else:
-                names = ', '.join([r.name for r in matching_roles])
-                self.send_message(channel, "Which one? {}".format(names))
+            return str(self.config[prop])
 
     @command
-    def add_admin(self, message, argument):
-        """{user} ... - Add mentioned users to list of admins."""
-        self.add_field('admins', 'user', message.channel, message.mentions)
-
-    @command
-    def remove_admin(self, message, argument):
-        """{user} ... - Remove mentioned users from list of admins."""
-        self.remove_field('admins', 'user', message.channel, message.mentions)
-
-    @command
-    def add_admin_role(self, message, argument):
-        """{role} - Add role to admin role list."""
-        self.add_field('admin_roles', 'role', message.channel, argument)
-
-    @command
-    def remove_admin_role(self, message, argument):
-        """{role} - Remove role from admin role list."""
-        self.remove_field('admin_roles', 'role', message.channel, argument)
-
-    @command
-    def add_user_command(self, message, argument):
-        """{command} ... - Add command(s) to user command list."""
-        self.add_field('user_commands', 'command', message.channel, argument)
-
-    @command
-    def remove_user_command(self, message, argument):
-        """{command} ... - Remove command(s) from user command list."""
-        self.remove_field('user_commands', 'command',
-                          message.channel, argument)
-
-    @command
-    def add_admin_command(self, message, argument):
-        """{command} ... - Add command(s) to admin command list."""
-        self.add_field('admin_commands', 'command', message.channel, argument)
-
-    @command
-    def remove_admin_command(self, message, argument):
-        """{command} ... - Remove command(s) from admin command list."""
-        self.remove_field('admin_commands', 'command',
-                          message.channel, argument)
-
-    @command
-    def debug(self, message, argument):
-        """{python expression} - Evaluate an arbitrary python expression"""
+    def debug(self, *code: str, channel: Channel):
+        """Evaluate an arbitrary python expression"""
         try:
-            self.send_message(message.channel, eval(argument))
+            self.send_message(channel, eval(' '.join(code)))
         except Exception as e:
-            self.send_message(message.channel,
-                              '{}: {}.'.format(type(e).__name__, e))
+            self.send_message(channel, '{}: {}.'.format(type(e).__name__, e))
 
 class DatagramHandler(BaseRequestHandler):
     def handle(self):
