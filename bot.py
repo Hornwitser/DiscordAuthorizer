@@ -38,14 +38,15 @@ class ForumBot(Client):
         if self.exception is not None:
             raise self.exception
 
-    def get_role(self, member):
-        if member.id in self.config['masters']:
+    def get_role(self, user):
+        if user.id in self.config['masters']:
             return 'master'
-        elif member.id in self.config['admins']:
+        elif user.id in self.config['admins']:
             return 'admin'
-        elif any((r.id in self.config['admin_roles'] for r in member.roles)):
-            return 'admin'
-        elif member.id in self.config['ignores']:
+        elif (isinstance(user, Member)
+            and any((r.id in self.config['admin_roles'] for r in user.roles))):
+                return 'admin'
+        elif user.id in self.config['ignores']:
             return 'ignore'
         else:
             return 'user'
@@ -390,13 +391,13 @@ class SocketServer(Thread):
             server.serve_forever()
 
         except Exception:
-            logging.exception('Exception occured while running SocketServer')
+            logging.exception("Exception occured while running SocketServer")
 
         except BaseException as e:
             self.bot.dispatch('raise_exception', e)
 
         # We should not normaly reach this point
-        logging.error('SocketServer closed!')
+        logging.error("SocketServer closed!")
 
 def write_config(config):
     config_file = open('config.py', 'w')

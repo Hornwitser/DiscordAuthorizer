@@ -15,4 +15,3 @@ class PeriodicTimer(Thread):
 
     def stop(self):
         self._event.set()
-
