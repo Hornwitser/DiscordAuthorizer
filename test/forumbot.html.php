@@ -22,7 +22,8 @@ if ($mysqli->connect_errno) {
 if (isset($_GET['create'])) {
     $name = $mysqli->real_escape_string($_GET['username']);
     $res = $mysqli->query(
-        "INSERT INTO xf_users SET username = '$name'"
+        "INSERT INTO xf_users SET username = '$name', user_group_id = 1, ".
+        "secondary_group_ids = '', is_banned = 0"
     );
 
     if (!$res) {
@@ -33,13 +34,17 @@ if (isset($_GET['create'])) {
         $logged_in = true;
         $token = null;
         $discord_id = null;
+        $group_id = 1;
+        $secondary_ids = "";
+        $is_banned = 0;
     }
 
 } else if (isset($_GET['username'])) {
     $name = $mysqli->real_escape_string($_GET['username']);
     $res = $mysqli->query(
         "SELECT x.user_id, NOW() < TIMESTAMPADD(MINUTE, $expire, issued), ".
-        "token, discord_id FROM xf_users AS x LEFT JOIN discord_tokens AS d ".
+        "token, discord_id, user_group_id, secondary_group_ids, is_banned ".
+        "FROM xf_users AS x LEFT JOIN discord_tokens AS d ".
         "ON x.user_id = d.user_id WHERE username = '$name'"
     );
 
@@ -50,7 +55,8 @@ if (isset($_GET['create'])) {
         $error = "No user named $_GET[username]";
         $logged_in = false;
     } else {
-        list($user_id, $valid, $token, $discord_id) = $res->fetch_row();
+        list($user_id, $valid, $token, $discord_id,
+             $group_id, $secondary_ids, $is_banned) = $res->fetch_row();
         $logged_in = true;
         if (isset($_GET['revoke'])) {
             $res = $mysqli->query(
@@ -95,6 +101,7 @@ if (isset($_GET['create'])) {
                 $discord_id = null;
             }
 
+
         } else if ($valid !== '1' && isset($_GET['token'])) {
             /* If you're using any of this code in your website you
                deserve to get pwned.  The following token generation
@@ -112,6 +119,25 @@ if (isset($_GET['create'])) {
             }
         } else if ($valid === '0') {
             $token = null;
+        }
+
+        if (isset($_GET['update'])) {
+            $gid = (int)$_GET['group_id'];
+            $sids = $mysqli->real_escape_string($_GET['secondary_ids']);
+            $banned = (int)isset($_GET['banned']);
+            $res = $mysqli->query(
+                "UPDATE xf_users SET user_group_id = $gid, ".
+                "secondary_group_ids = '$sids', is_banned = $banned ".
+                "WHERE user_id = $user_id"
+            );
+
+            if (!$res) {
+                $error = $mysqli->error;
+            } else {
+                $group_id = $gid;
+                $secondary_ids = $_GET['secondary_ids'];
+                $is_banned = $banned;
+            }
         }
     }
 
@@ -136,6 +162,7 @@ if (isset($error)) { ?>
 }
 
 if (!$logged_in) { ?>
+        <h4>Forum test</h4>
         <form action="forumbot" method="GET">
             Username:
             <input type="text" name="username">
@@ -144,6 +171,7 @@ if (!$logged_in) { ?>
         </form>
 <?php
 } else { ?>
+        <h4>User panel</h4>
         <form action="forumbot" method="GET">
             Logged in as <?=html($_GET['username'])?> <input type="submit" value="Log out">
         </form>
@@ -169,7 +197,16 @@ if (!$logged_in) { ?>
         </form>
 <?php
         }
-    }
+    } ?>
+        <h4>Admin panel</h4>
+        <form action="forumbot" method="GET">
+            <input type="hidden" name="username" value="<?=html($_GET['username'])?>">
+            Group id <input type="text" name="group_id" value="<?=$group_id?>">
+            Secondary ids <input type="text" name="secondary_ids" value="<?=html($secondary_ids)?>">
+            Banned: <input type="checkbox" name="banned"<?=$is_banned ? ' checked' : ''?>>
+            <input type="submit" name="update" value="Update Account">
+        </form>
+<?php
 } ?>
     </body>
 </head>
