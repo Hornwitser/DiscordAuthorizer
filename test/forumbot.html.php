@@ -11,6 +11,40 @@ $schema = $_SERVER['DB_SCHEMA'];
 $expire = $_SERVER['EXPIRE'];
 $socket = $_SERVER['SOCKET'];
 
+function refresh_user($discord_id) {
+    global $socket, $error;
+
+    $so = socket_create(AF_UNIX, SOCK_DGRAM, 0);
+    if ($so === false) {
+        $msg = socket_strerror(socket_last_error());
+        $error = "Socket failed: $msg";
+
+    } else {
+        $res = socket_connect($so, $socket);
+        if ($res === false) {
+            $msg = socket_strerror(socket_last_error());
+            $error = "Connect failed: $msg";
+
+        } else {
+            $payload = json_encode(array(
+                'action' => 'refresh',
+                'discord_id' => $discord_id,
+            ));
+
+            $res = socket_write($so, $payload);
+            if ($res === false) {
+                $error = "Socket send failed";
+
+            } else if ($res < strlen($payload)) {
+                $error = "Socket did not send all data";
+            }
+
+            socket_shutdown($so);
+            socket_close($so);
+        }
+    }
+}
+
 $mysqli = new mysqli($host, $user, $password, $schema);
 if ($mysqli->connect_errno) {
     header("HTTP/1.0 500 Internal Server Error");
@@ -68,36 +102,7 @@ if (isset($_GET['create'])) {
                 $error = $mysqli->error;
 
             } else {
-                $so = socket_create(AF_UNIX, SOCK_DGRAM, 0);
-                if ($so === false) {
-                    $msg = socket_strerror(socket_last_error());
-                    $error = "Socket failed: $msg";
-
-                } else {
-                    $res = socket_connect($so, $socket);
-                    if ($res === false) {
-                        $msg = socket_strerror(socket_last_error());
-                        $error = "Connect failed: $msg";
-
-                    } else {
-                        $payload = json_encode(array(
-                            'action' => 'revoke',
-                            'user_id' => $discord_id,
-                        ));
-
-                        $res = socket_write($so, $payload);
-                        if ($res === false) {
-                            $error = "Socket send failed";
-
-                        } else if ($res < strlen($payload)) {
-                            $error = "Socket did not send all data";
-                        }
-
-                        socket_shutdown($so);
-                        socket_close($so);
-                    }
-                }
-
+                refresh_user($discord_id);
                 $discord_id = null;
             }
 
@@ -134,6 +139,7 @@ if (isset($_GET['create'])) {
             if (!$res) {
                 $error = $mysqli->error;
             } else {
+                refresh_user($discord_id);
                 $group_id = $gid;
                 $secondary_ids = $_GET['secondary_ids'];
                 $is_banned = $banned;

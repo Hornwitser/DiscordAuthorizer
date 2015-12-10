@@ -56,11 +56,6 @@ class ForumBot(Client):
         return utils.find(lambda s: s.id == self.config['server'],
                           self.servers)
 
-    @property
-    def auth_role(self):
-        return utils.find(lambda r: r.id == self.config['role'],
-                          self.bot_server.roles)
-
     def resolve_permission(self, server, role, cmd):
         if role == 'master':
             return 'allow'
@@ -132,75 +127,109 @@ class ForumBot(Client):
             connection.rollback()
 
     def try_token(self, user, token):
-        with connection.cursor() as cursor:
-            sql = ("SELECT NOW() < TIMESTAMPADD(MINUTE, %s, issued) AS valid, "
-                   "user_id FROM discord_tokens WHERE token = %s")
-            cursor.execute(sql, (self.config['token_timeout'], token))
-            if cursor.rowcount == 1:
-                row = cursor.fetchone()
-                valid = bool(row['valid'])
-                user_id = row['user_id']
+        refresh = []
+        try:
+            with connection.cursor() as cursor:
+                sql = ("SELECT NOW() < TIMESTAMPADD(MINUTE, %s, issued) "
+                       "AS valid, user_id FROM discord_tokens "
+                       "WHERE token = %s")
+                cursor.execute(sql, (self.config['token_timeout'], token))
+                if cursor.rowcount == 1:
+                    row = cursor.fetchone()
+                    valid = bool(row['valid'])
+                    user_id = row['user_id']
 
-                # Invalidate token
-                sql = "DELETE FROM discord_tokens WHERE token = %s"
-                cursor.execute(sql, (token,))
+                    # Invalidate token
+                    sql = "DELETE FROM discord_tokens WHERE token = %s"
+                    cursor.execute(sql, (token,))
+                    connection.commit()
+
+                    if not valid:
+                        self.send_message(user, "This token has expired.")
+                        return
+                else:
+                    self.send_message(user, "This token is not valid.")
+                    connection.rollback()
+                    return
+
+                # Check if this user is already linked to another accont
+                sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+                cursor.execute(sql, (user.id,))
+                if cursor.rowcount:
+                    username = cursor.fetchone()['username']
+                    self.send_message(user, "This Discord account is already "
+                                      "linked to '{}'.".format(username))
+                    connection.rollback()
+                    return
+
+                # Check if another user is already linked to this account
+                sql = "SELECT discord_id FROM xf_users WHERE user_id = %s"
+                cursor.execute(sql, (user_id,))
+                if cursor.rowcount:
+                    refresh.append(cursor.fetchone()['discord_id'])
+
+                # Link this discord user to the account indicated by the token
+                sql = "UPDATE xf_users SET discord_id = %s WHERE user_id = %s"
+                cursor.execute(sql, (user.id, user_id))
                 connection.commit()
 
-                if not valid:
-                    self.send_message(user, "This token has expired.")
-                    return
-            else:
-                self.send_message(user, "This token is not valid.")
-                connection.rollback()
-                return
+                refresh.append(user.id)
 
-            # Check if this discord user is already linked to another accont
-            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
-            cursor.execute(sql, (user.id,))
-            if cursor.rowcount:
-                username = cursor.fetchone()['username']
-                self.send_message(user, "This Discord account is already "
-                                  "linked to '{}'.".format(username))
-                connection.rollback()
-                return
+        finally:
+            for user_id in refresh:
+                self.refresh_id(user_id)
 
-            # Check if another discord user is already linked to this account
-            sql = "SELECT discord_id FROM xf_users WHERE user_id = %s"
-            cursor.execute(sql, (user_id,))
-            if cursor.rowcount:
-                self.revoke_id(cursor.fetchone()['discord_id'])
-
-            # Link this discord user to the account indicated by the token
-            sql = "UPDATE xf_users SET discord_id = %s WHERE user_id = %s"
-            cursor.execute(sql, (user.id, user_id))
-            connection.commit()
-
-        self.authorize_id(user.id)
         self.send_message(user, "Authorisation successful.")
+
+    def mapped_roles(self, member, row):
+        if row['is_banned']:
+            return set()
+
+        mapping = self.config['group_mapping']
+        managed_roles = set(mapping.values())
+        forum_ids = set([row['user_group_id']])
+        if row['secondary_group_ids']:
+            try:
+                forum_ids |= set(map(int, row['secondary_group_ids']
+                                     .split(b',')))
+            except Exception as e:
+                logging.error("Parsing group ids '{}' on discord user {} "
+                              "failed.".format(row['secondary_group_ids'],
+                                               member.id))
+        have_ids = {mapping[i] for i in forum_ids if i in mapping}
+
+        keep = [r for r in member.roles if r.id not in managed_roles]
+        have = [r for r in self.bot_server.roles if r.id in have_ids]
+        return set(keep) | set(have)
+
 
     def sync_database(self):
         if not self.is_logged_in:
             return
 
         with connection.cursor() as cursor:
-            sql = ("SELECT discord_id FROM xf_users "
-                   "WHERE discord_id IS NOT NULL")
+            sql = ("SELECT discord_id, user_group_id, secondary_group_ids, "
+                   "is_banned FROM xf_users WHERE discord_id IS NOT NULL")
             cursor.execute(sql)
-            authorized_ids = {r['discord_id'] for r in cursor.fetchall()}
+            accounts = {row['discord_id']: row for row in cursor.fetchall()}
 
         connection.rollback()
 
         changes = 0
-        auth_role = self.auth_role
+        managed_roles = set(self.config['group_mapping'].values())
+
         for member in self.bot_server.members:
-            if member.id in authorized_ids:
-                if auth_role not in member.roles:
-                    self.add_roles(member, auth_role)
+            if member.id in accounts:
+                row = accounts[member.id]
+                roles = self.mapped_roles(member, row)
+                if roles != set(member.roles):
+                    self.replace_roles(member, *roles)
                     changes += 1
 
             else:
-                if auth_role in member.roles:
-                    self.remove_roles(member, auth_role)
+                roles = [r for r in member.roles if r.id in managed_roles]
+                if roles:
+                    self.remove_roles(member, *roles)
                     changes += 1
 
         return changes
@@ -217,21 +246,25 @@ class ForumBot(Client):
         else:
             return "No changes."
 
-    def revoke_id(self, user_id):
-        """Revoke the authorization given to a user"""
-        user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
-        if user is not None:
-            # Remove additional roles that may have been granted
-            self.remove_roles(user, self.auth_role)
+    def refresh_id(self, user_id):
+        """Refresh the authorizations given to a user"""
+        member = utils.find(lambda u: u.id == user_id, self.bot_server.members)
+        if member is not None:
+            managed_roles = set(self.config['group_mapping'].values())
 
-    def on_revoke_id(self, user_id):
-        self.revoke_id(user_id)
+            with connection.cursor() as cursor:
+                sql = ("SELECT user_group_id, secondary_group_ids, is_banned "
+                       "FROM xf_users WHERE discord_id = %s")
+                cursor.execute(sql, (user_id,))
+                row = cursor.fetchone()
+                connection.rollback()
 
-    def authorize_id(self, user_id):
-        user = utils.find(lambda u: u.id == user_id, self.bot_server.members)
-        if user is not None:
-            # Query database and check for additional roles to set
-            self.add_roles(user, self.auth_role)
+            roles = self.mapped_roles(member, row)
+            if roles != set(member.roles):
+                self.replace_roles(member, *roles)
+
+    def on_refresh_id(self, user_id):
+        self.refresh_id(user_id)
 
     @command
     def help(self, what: str=None, *,  author: User):
@@ -372,8 +405,8 @@ class ForumBot(Client):
 class DatagramHandler(BaseRequestHandler):
     def handle(self):
         request = json.loads(self.request[0].decode('utf-8'))
-        if request['action'] == 'revoke':
-            self.server.bot.dispatch('revoke_id', request['user_id'])
+        if request['action'] == 'refresh':
+            self.server.bot.dispatch('refresh_id', request['user_id'])
         else:
             logging.warning("Unkown request '{}'.".format(json.dumps(request)))
 
