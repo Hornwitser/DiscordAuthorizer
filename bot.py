@@ -333,6 +333,12 @@ class ForumBot(Client):
         "admin_commands": {
             "type": set,
             "check": "command",
+        },
+        "group_mapping": {
+            "type": dict,
+            "key-convert": int,
+            "value-convert": Role,
+            "value-key": lambda r: r.id,
         }
     }
 
@@ -385,6 +391,45 @@ class ForumBot(Client):
         self.config[prop].difference_update(removals)
 
         return "Removed ({}) from {}.".format(", ".join(removals), prop)
+
+    @command
+    def bind(self, prop: str, key, value, *, server: Server):
+        """Bind a value to a key in a property"""
+        if prop not in self.properties:
+            return "{} is not a property".format(prop)
+
+        desc = self.properties[prop]
+        if desc['type'] != dict:
+            return "{} is not a bindable property".format(prop)
+
+        if 'key-convert' in desc:
+            key = convert(server, 'key', desc['key-convert'], key)
+
+        if 'value-convert' in desc:
+            value = convert(server, 'value', desc['value-convert'], value)
+        if 'value-key' in desc:
+            value = desc['value-key'](value)
+
+        self.config[prop][key] = value
+
+        return "Bound {} to {} in {}.".format(value, key, prop)
+
+    @command
+    def unbind(self, prop: str, key):
+        """Remove a key value pair in a property"""
+        if prop not in self.properties:
+            return "{} is not a property".format(prop)
+
+        desc = self.properties[prop]
+        if desc['type'] != dict:
+            return "{} is not an unbindable property".format(prop)
+
+        if 'key-convert' in desc:
+            key = convert(server, 'value', desc['key-convert'], key)
+
+        del self.config[prop][key]
+
+        return "Removed {} from {}.".format(key, prop)
 
     @command
     def show(self, prop: str):
