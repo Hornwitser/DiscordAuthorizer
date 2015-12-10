@@ -6,7 +6,7 @@ import os
 from socketserver import UnixDatagramServer, BaseRequestHandler
 from threading import Thread
 
-from discord import Channel, Client, Member, Role, Server, User, utils
+from discord import Channel, Client, Member, Message, Role, Server, User, utils
 import pymysql
 
 from utils import PeriodicTimer
@@ -440,12 +440,12 @@ class ForumBot(Client):
             return str(self.config[prop])
 
     @command
-    def debug(self, *code: str, channel: Channel):
+    def debug(self, *code: str, author: User, msg: Message, ch: Channel):
         """Evaluate an arbitrary python expression"""
         try:
-            self.send_message(channel, eval(' '.join(code)))
+            self.send_message(ch, eval(' '.join(code)))
         except Exception as e:
-            self.send_message(channel, '{}: {}.'.format(type(e).__name__, e))
+            self.send_message(ch, '{}: {}.'.format(type(e).__name__, e))
 
 class DatagramHandler(BaseRequestHandler):
     def handle(self):
