@@ -290,7 +290,8 @@ class ForumBot(Client):
                 else:
                     fmt = '[{{}}{}] '.format(optional)
                 if param.annotation is not param.empty:
-                    params.append(fmt.format(param.annotation.__name__))
+                    msg ='{}: {}'.format(param.name, param.annotation.__name__)
+                    params.append(fmt.format(msg))
                 else:
                     params.append(fmt.format(param.name))
 
