@@ -253,9 +253,16 @@ class ForumBot(Client):
                 row = cursor.fetchone()
                 connection.rollback()
 
-            roles = self.mapped_roles(member, row)
-            if roles != set(member.roles):
-                self.replace_roles(member, *roles)
+            if row is not None:
+                # Get managed roles for the member and update if needed
+                roles = self.mapped_roles(member, row)
+                if roles != set(member.roles):
+                    self.replace_roles(member, *roles)
+            else:
+                # Member is not registered, remove all managed roles
+                roles = [r for r in member.roles if r.id in managed_roles]
+                if roles:
+                    self.remove_roles(member, *roles)
 
     def on_refresh_id(self, user_id):
         self.refresh_id(user_id)
