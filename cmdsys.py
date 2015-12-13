@@ -103,16 +103,32 @@ def convert(server, name, type_,  value):
     elif type_ is Member:
         if value.startswith('<@') and value.endswith('>'):
             uid = value[2:-1]
-        elif value.strip('0123456789') == '':
-            uid = value
+            member = utils.find(lambda u: u.id == uid, server.members)
+            if member is None:
+                raise ValueError("Member {} not found".format(value))
+
+            return member
         else:
-            raise ValueError("'{}' is not a user".format(value))
-
-        member = utils.find(lambda u: u.id == uid, server.members)
-        if member is None:
-            raise ValueError("Member {} not found".format(value))
-
-        return member
+            matches = []
+            full_matches = []
+            for member in server.members:
+                if value == member.id:
+                    return member
+                elif value == member.name:
+                    full_matches.append(member)
+                elif value.lower() in member.name.lower():
+                    matches.append(member)
+            else:
+                if len(full_matches) == 1:
+                    return full_matches[0]
+                elif full_matches:
+                    raise ValueError("Multiple members Matched")
+                elif len(matches) == 1:
+                    return matches[0]
+                elif matches:
+                    raise ValueError("Multiple members matched")
+                else:
+                    raise ValueError("Member '{}' not found".format(value))
 
     elif type_ is Role:
         matches = []
