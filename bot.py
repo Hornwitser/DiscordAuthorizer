@@ -118,13 +118,7 @@ class ForumBot(Client):
                                   "use this command.")
 
     def on_member_join(self, member):
-        with connection.cursor() as cursor:
-            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
-            cursor.execute(sql, (member.id,))
-            if cursor.rowcount:
-                # Query database and check for additional roles to set
-                self.add_roles(member, self.auth_role)
-            connection.rollback()
+        self.refresh_id(member.id)
 
     def try_token(self, user, token):
         refresh = []
