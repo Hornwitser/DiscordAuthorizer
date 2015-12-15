@@ -1,2 +1,5 @@
 # ForumBot configuration file
 config.py
+
+# Python cache files
+__pycache__/
