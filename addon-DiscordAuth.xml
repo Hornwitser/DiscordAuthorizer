@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<addon addon_id="DiscordAuth" title="Discord Authorizer" version_string="0.0.1-alpha" version_id="1" url="" install_callback_class="DiscordAuth_Addon" install_callback_method="install" uninstall_callback_class="DiscordAuth_Addon" uninstall_callback_method="uninstall">
+  <admin_navigation/>
+  <admin_permissions/>
+  <admin_style_properties/>
+  <admin_templates/>
+  <admin_template_modifications/>
+  <code_events/>
+  <code_event_listeners>
+    <listener event_id="load_class_controller" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="loadClassListener" active="1" hint="" description="Extends Acount controller"/>
+    <listener event_id="load_class_datawriter" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="loadClassListener" active="1" hint="" description="Extends XenForo_Datawrite_User class"/>
+    <listener event_id="template_create" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="templateCreateListener" active="1" hint="" description="Preload profile templates"/>
+    <listener event_id="template_hook" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="templateHookListener" active="1" hint="" description="Hook into profile tabs"/>
+  </code_event_listeners>
+  <cron/>
+  <email_templates/>
+  <email_template_modifications/>
+  <optiongroups>
+    <group group_id="discordauthOptions" display_order="1" debug_only="0"/>
+    <option option_id="botSocket" edit_format="textbox" data_type="string" can_backup="1">
+      <default_value></default_value>
+      <edit_format_params></edit_format_params>
+      <sub_options></sub_options>
+      <relation group_id="discordauthOptions" display_order="1"/>
+    </option>
+    <option option_id="validPeriod" edit_format="spinbox" data_type="unsigned_integer" can_backup="1">
+      <default_value>5</default_value>
+      <edit_format_params></edit_format_params>
+      <sub_options></sub_options>
+      <relation group_id="discordauthOptions" display_order="1"/>
+    </option>
+  </optiongroups>
+  <permissions>
+    <permission_groups/>
+    <permissions/>
+    <interface_groups/>
+  </permissions>
+  <phrases>
+    <phrase title="discordauth_authorization_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Authorization Token]]></phrase>
+    <phrase title="discordauth_discord_server" version_id="1" version_string="0.0.1-alpha"><![CDATA[Discord Server]]></phrase>
+    <phrase title="discordauth_discord_server_authorization" version_id="1" version_string="0.0.1-alpha"><![CDATA[Discord Server Authorization]]></phrase>
+    <phrase title="discordauth_generate_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Generate Token]]></phrase>
+    <phrase title="discordauth_linked_with" version_id="1" version_string="0.0.1-alpha"><![CDATA[Linked with]]></phrase>
+    <phrase title="discordauth_revoke_account" version_id="1" version_string="0.0.1-alpha"><![CDATA[Revoke Account]]></phrase>
+    <phrase title="option_botSocket" version_id="1" version_string="0.0.1"><![CDATA[Bot Communication Socket]]></phrase>
+    <phrase title="option_botSocket_explain" version_id="1" version_string="0.0.1"><![CDATA[Unix domain socket to the Discord Bot that manages the roles.]]></phrase>
+    <phrase title="option_group_discordauthOptions" version_id="1" version_string="0.0.1"><![CDATA[Discord Options]]></phrase>
+    <phrase title="option_group_discordauthOptions_description" version_id="1" version_string="0.0.1"><![CDATA[]]></phrase>
+    <phrase title="option_validPeriod" version_id="1" version_string="0.0.1-alpha"><![CDATA[Token Lifetime]]></phrase>
+    <phrase title="option_validPeriod_explain" version_id="1" version_string="0.0.1-alpha"><![CDATA[The period in minutes a toked in valid before it expires.]]></phrase>
+  </phrases>
+  <route_prefixes/>
+  <style_properties/>
+  <templates>
+    <template title="discordauth_account_discord" version_id="1" version_string="0.0.1-alpha"><![CDATA[<xen:title>{xen:phrase discordauth_discord_server}</xen:title>
+
+<xen:require css="account.css" />
+
+
+<form method="post" class="xenForm formOverlay NoFixedOverlay"
+	action="{xen:link 'account/discord-link'}"
+	data-redirect="yes">
+	<p>Join the discord server, blah blah, blah, blah, blah, blah, blah.</p>
+	<!-- TODO instructions -->
+	<!-- TODO invite link -->
+	
+	<h3 class="sectionHeader">{xen:phrase discordauth_discord_server_authorization}</h3>
+	<xen:if is="{$visitor.da_discord_id}">
+		<dl class="ctrlUnit">
+			<dt>{xen:phrase discordauth_linked_with}:</dt>
+			<dd>
+				{$visitor.da_discord_id}
+				<input type="submit" name="unlink" value="{xen:phrase discordauth_revoke_account}" class="button" />
+			</dd>
+		</dl>
+		<dl class="ctrlUnit">
+			<dt></dt>
+			<dd></dd>
+		</dl>
+	</xen:if>
+	
+	<xen:if is="{$token}">
+		<dl class="ctrlUnit">
+		        <dt>{xen:phrase discordauth_authorization_token}:</dt>
+		        <dd>{$token.token}</dd>
+		</dl>
+	<xen:else />
+		<dl class="ctrlUnit">
+			<dt>Authorization Token:</dt>
+			<dd><input type="submit" name="create" value="{xen:phrase discordauth_generate_token}" class="button primary" /></dd>
+		</dl>
+	</xen:if>
+	
+	<input type="hidden" name="_xfToken" value="{$visitor.csrf_token_page}" />
+</form>
+	]]></template>
+    <template title="discordauth_account_wrapper_sidebar" version_id="1" version_string="0.0.1-alpha"><![CDATA[<li>
+    <a class="{xen:if "{$selectedKey} == 'account/discord'", 'secondaryContent', 'primaryContent'}"
+       href="{xen:link account/discord}">
+        {xen:phrase discordauth_discord_server}
+    </a>
+</li>
+]]></template>
+    <template title="discordauth_navigation_tab_link" version_id="1" version_string="0.0.1-alpha"><![CDATA[<li><a href="{xen:link account/discord}">{xen:phrase discordauth_discord_server}</a></li>
+]]></template>
+  </templates>
+  <public_template_modifications/>
+  <bb_code_media_sites/>
+  <bb_codes/>
+</addon>
