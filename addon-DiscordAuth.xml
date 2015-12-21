@@ -22,6 +22,12 @@
       <sub_options></sub_options>
       <relation group_id="discordauthOptions" display_order="1"/>
     </option>
+    <option option_id="discordInvite" edit_format="textbox" data_type="string" can_backup="1">
+      <default_value></default_value>
+      <edit_format_params></edit_format_params>
+      <sub_options></sub_options>
+      <relation group_id="discordauthOptions" display_order="1"/>
+    </option>
     <option option_id="validPeriod" edit_format="spinbox" data_type="unsigned_integer" can_backup="1">
       <default_value>5</default_value>
       <edit_format_params></edit_format_params>
@@ -35,15 +41,21 @@
     <interface_groups/>
   </permissions>
   <phrases>
+    <phrase title="discordauth_authorization" version_id="1" version_string="0.0.2-alpha"><![CDATA[Authorization]]></phrase>
     <phrase title="discordauth_authorization_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Authorization Token]]></phrase>
     <phrase title="discordauth_discord_server" version_id="1" version_string="0.0.1-alpha"><![CDATA[Discord Server]]></phrase>
-    <phrase title="discordauth_discord_server_authorization" version_id="1" version_string="0.0.1-alpha"><![CDATA[Discord Server Authorization]]></phrase>
     <phrase title="discordauth_generate_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Generate Token]]></phrase>
+    <phrase title="discordauth_introduction" version_id="1" version_string="0.0.2-alpha"><![CDATA[The discord server associated with this forum is protected by an authorization bot that only allows users from the forum to enter it. In order to take part of it you must generate a token below and sent it to the authorization bot.]]></phrase>
+    <phrase title="discordauth_invite" version_id="1" version_string="0.0.2-alpha"><![CDATA[Invite]]></phrase>
+    <phrase title="discordauth_join_server" version_id="1" version_string="0.0.2-alpha"><![CDATA[Join Server]]></phrase>
     <phrase title="discordauth_linked_with" version_id="1" version_string="0.0.1-alpha"><![CDATA[Linked with]]></phrase>
-    <phrase title="discordauth_revoke_account" version_id="1" version_string="0.0.1-alpha"><![CDATA[Revoke Account]]></phrase>
+    <phrase title="discordauth_revoke_authorization" version_id="1" version_string="0.0.2-alpha"><![CDATA[Revoke Authorization]]></phrase>
+    <phrase title="discordauth_unlink" version_id="1" version_string="0.0.2-alpha"><![CDATA[Unlink]]></phrase>
     <phrase title="option_botSocket" version_id="1" version_string="0.0.1"><![CDATA[Bot Communication Socket]]></phrase>
-    <phrase title="option_botSocket_explain" version_id="1" version_string="0.0.1"><![CDATA[Unix domain socket to the Discord Bot that manages the roles.]]></phrase>
-    <phrase title="option_group_discordauthOptions" version_id="1" version_string="0.0.1"><![CDATA[Discord Options]]></phrase>
+    <phrase title="option_botSocket_explain" version_id="1" version_string="0.0.2-alpha"><![CDATA[Unix domain socket to the Discord Bot that manages the roles. Rapid role updates will be disabled if this is left blank.]]></phrase>
+    <phrase title="option_discordInvite" version_id="1" version_string="0.0.2-alpha"><![CDATA[Discord Server Invite]]></phrase>
+    <phrase title="option_discordInvite_explain" version_id="1" version_string="0.0.2-alpha"><![CDATA[An invitation link shown in the Discord Server page.  Left out if blank.]]></phrase>
+    <phrase title="option_group_discordauthOptions" version_id="1" version_string="0.0.2-alpha"><![CDATA[Discord Authorizer Addon]]></phrase>
     <phrase title="option_group_discordauthOptions_description" version_id="1" version_string="0.0.1"><![CDATA[]]></phrase>
     <phrase title="option_validPeriod" version_id="1" version_string="0.0.1-alpha"><![CDATA[Token Lifetime]]></phrase>
     <phrase title="option_validPeriod_explain" version_id="1" version_string="0.0.1-alpha"><![CDATA[The period in minutes a toked in valid before it expires.]]></phrase>
@@ -51,7 +63,7 @@
   <route_prefixes/>
   <style_properties/>
   <templates>
-    <template title="discordauth_account_discord" version_id="1" version_string="0.0.1-alpha"><![CDATA[<xen:title>{xen:phrase discordauth_discord_server}</xen:title>
+    <template title="discordauth_account_discord" version_id="1" version_string="0.0.2-alpha"><![CDATA[<xen:title>{xen:phrase discordauth_discord_server}</xen:title>
 
 <xen:require css="account.css" />
 
@@ -59,29 +71,21 @@
 <form method="post" class="xenForm formOverlay NoFixedOverlay"
 	action="{xen:link 'account/discord-link'}"
 	data-redirect="yes">
-	<p>Join the discord server, blah blah, blah, blah, blah, blah, blah.</p>
-	<!-- TODO instructions -->
-	<!-- TODO invite link -->
-	
-	<h3 class="sectionHeader">{xen:phrase discordauth_discord_server_authorization}</h3>
-	<xen:if is="{$visitor.da_discord_id}">
+	<p>{xen:phrase discordauth_introduction}</p>
+
+	<xen:if is="{$xenOptions.discordInvite}">
 		<dl class="ctrlUnit">
-			<dt>{xen:phrase discordauth_linked_with}:</dt>
-			<dd>
-				{$visitor.da_discord_id}
-				<input type="submit" name="unlink" value="{xen:phrase discordauth_revoke_account}" class="button" />
-			</dd>
-		</dl>
-		<dl class="ctrlUnit">
-			<dt></dt>
-			<dd></dd>
+			<dt>{xen:phrase discordauth_invite}:</dt>
+			<dd><a class="button primary" href="{$xenOptions.discordInvite}">{xen:phrase discordauth_join_server}</a></dd>
 		</dl>
 	</xen:if>
-	
+
+	<!-- slot: discordauth_after_invite -->
+
+	<h3 class="sectionHeader">{xen:phrase discordauth_authorization}</h3>
 	<xen:if is="{$token}">
 		<dl class="ctrlUnit">
-		        <dt>{xen:phrase discordauth_authorization_token}:</dt>
-		        <dd>{$token.token}</dd>
+		        <dt>{xen:phrase discordauth_authorization_token}:</dt><dd>{$token.token}</dd>
 		</dl>
 	<xen:else />
 		<dl class="ctrlUnit">
@@ -89,7 +93,18 @@
 			<dd><input type="submit" name="create" value="{xen:phrase discordauth_generate_token}" class="button primary" /></dd>
 		</dl>
 	</xen:if>
-	
+
+	<xen:if is="{$visitor.da_discord_id}">
+		<dl class="ctrlUnit">
+			<dt>{xen:phrase discordauth_linked_with}:</dt><dd>{$visitor.da_discord_id}</dd>
+		</dl>
+		<dl class="ctrlUnit">
+			<dt>{xen:phrase discordauth_unlink}:</dt>
+			<dd><input type="submit" name="unlink" value="{xen:phrase discordauth_revoke_authorization}" class="button" /></dd>
+		</dl>
+
+	</xen:if>
+
 	<input type="hidden" name="_xfToken" value="{$visitor.csrf_token_page}" />
 </form>
 	]]></template>
