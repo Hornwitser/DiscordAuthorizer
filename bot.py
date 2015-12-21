@@ -125,7 +125,7 @@ class ForumBot(Client):
         try:
             with connection.cursor() as cursor:
                 sql = ("SELECT NOW() < TIMESTAMPADD(MINUTE, %s, issued) "
-                       "AS valid, user_id FROM discord_tokens "
+                       "AS valid, user_id FROM xf_da_token "
                        "WHERE token = %s")
                 cursor.execute(sql, (self.config['token_timeout'], token))
                 if cursor.rowcount == 1:
@@ -134,7 +134,7 @@ class ForumBot(Client):
                     user_id = row['user_id']
 
                     # Invalidate token
-                    sql = "DELETE FROM discord_tokens WHERE token = %s"
+                    sql = "DELETE FROM xf_da_token WHERE token = %s"
                     cursor.execute(sql, (token,))
                     connection.commit()
 
@@ -147,7 +147,7 @@ class ForumBot(Client):
                     return
 
                 # Check if this user is already linked to another accont
-                sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+                sql = "SELECT username FROM xf_user WHERE da_discord_id = %s"
                 cursor.execute(sql, (user.id,))
                 if cursor.rowcount:
                     username = cursor.fetchone()['username']
@@ -157,13 +157,14 @@ class ForumBot(Client):
                     return
 
                 # Check if another user is already linked to this account
-                sql = "SELECT discord_id FROM xf_users WHERE user_id = %s"
+                sql = "SELECT da_discord_id FROM xf_user WHERE user_id = %s"
                 cursor.execute(sql, (user_id,))
                 if cursor.rowcount:
-                    refresh.append(cursor.fetchone()['discord_id'])
+                    refresh.append(cursor.fetchone()['da_discord_id'])
 
                 # Link this discord user to the account indicated by the token
-                sql = "UPDATE xf_users SET discord_id = %s WHERE user_id = %s"
+                sql = ("UPDATE xf_user SET da_discord_id = %s "
+                       "WHERE user_id = %s")
                 cursor.execute(sql, (user.id, user_id))
                 connection.commit()
 
@@ -202,10 +203,10 @@ class ForumBot(Client):
             return
 
         with connection.cursor() as cursor:
-            sql = ("SELECT discord_id, user_group_id, secondary_group_ids, "
-                   "is_banned FROM xf_users WHERE discord_id IS NOT NULL")
+            sql = ("SELECT da_discord_id, user_group_id, secondary_group_ids, "
+                   "is_banned FROM xf_user WHERE da_discord_id IS NOT NULL")
             cursor.execute(sql)
-            accounts = {row['discord_id']: row for row in cursor.fetchall()}
+            accounts = {row['da_discord_id']: row for row in cursor.fetchall()}
 
         connection.rollback()
 
@@ -248,7 +249,7 @@ class ForumBot(Client):
 
             with connection.cursor() as cursor:
                 sql = ("SELECT user_group_id, secondary_group_ids, is_banned "
-                       "FROM xf_users WHERE discord_id = %s")
+                       "FROM xf_user WHERE da_discord_id = %s")
                 cursor.execute(sql, (user_id,))
                 row = cursor.fetchone()
                 connection.rollback()
@@ -307,7 +308,7 @@ class ForumBot(Client):
     def whois(self, who: Member):
         """Tell who a user is."""
         with connection.cursor() as cursor:
-            sql = "SELECT username FROM xf_users WHERE discord_id = %s"
+            sql = "SELECT username FROM xf_user WHERE da_discord_id = %s"
             cursor.execute(sql, (who.id,))
             if cursor.rowcount:
                 username = cursor.fetchone()['username']
