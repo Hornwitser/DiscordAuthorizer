@@ -2,18 +2,6 @@
 
 class DiscordAuth_Addon
 {
-    public static function templateCreateListener(
-        &$templateName,
-        array &$params,
-        XenForo_Template_Abstract $template
-    ) {
-        /* ???
-        if ($templateName === 'member_view') {
-            $template->preloadTemplate('discordauth_account_wrapper_sidebar');
-            $template->preloadTemplate('discordauth_profile_tab_content');
-        } */
-    }
-
     public static function templateHookListener(
         $hookName,
         &$contents,
