@@ -63,27 +63,33 @@ class DiscordAuth_DataWriter_User
         // Todo: Catch eceptions and log them.
     }
 
-    public function _postSaveAfterTransaction()
+    public function _postSave()
     {
-        parent::_postSaveAfterTransaction();
+        parent::_postSave();
 
         $discordId = $this->getExisting('da_discord_id');
         if ($discordId !== null) {
-            self::refreshDiscordId($discordId);
+            XenForo_CodeEvent::addListener(
+                'controller_post_dispatch',
+                function ($c, $r, $n, $a) use ($discordId) {
+                    self::refreshDiscordId($discordId);
+                }
+            );
         }
     }
 
-    // Unfortunately there's no _postDeleteAfterTransaction
-    public function delete()
+    public function _postDelete()
     {
+        parent::_postDelete();
+
         $discordId = $this->getExisting('da_discord_id');
-
-        $result = parent::delete();
-
         if ($result && $discordId !== null) {
-            self::refreshDiscordId($discordId);
+            XenForo_CodeEvent::addListener(
+                'controller_post_dispatch',
+                function ($c, $r, $n, $a) use ($discordId) {
+                    self::refreshDiscordId($discordId);
+                }
+            );
         }
-
-        return $result;
     }
 }
