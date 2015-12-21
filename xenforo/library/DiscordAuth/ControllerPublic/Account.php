@@ -23,7 +23,11 @@ class DiscordAuth_ControllerPublic_Account
     {
         $tokenModel = $this->_getTokenModel();
         $visitor = XenForo_Visitor::getInstance();
-        $token = $tokenModel->getValidTokenByUserId($visitor['user_id']);
+        $token = $tokenModel->getTokenByUserId($visitor['user_id']);
+
+        if ($token !== false && !$token['valid']) {
+            $token = false;
+        }
 
         $viewParams = array(
             'token' => $token,
@@ -53,16 +57,19 @@ class DiscordAuth_ControllerPublic_Account
         );
 
         if (strlen($generate)) {
-            $token = self::generateToken();
             $dw = XenForo_DataWriter::create('DiscordAuth_DataWriter_Token');
             $existing = $tokenModel->getTokenByUserId($visitor['user_id']);
-            if ($existing !== false) {
-                $dw->setExistingData($existing, true);
+
+            if ($existing === false || !$existing['valid']) {
+                if ($existing !== false) {
+                    $dw->setExistingData($existing, true);
+                }
+
+                $dw->set('user_id', $visitor['user_id']);
+                $dw->set('token', self::generateToken());
+                $dw->save();
             }
 
-            $dw->set('user_id', $visitor['user_id']);
-            $dw->set('token', $token);
-            $dw->save();
         }
 
         $unlink = $this->_input->filterSingle(
