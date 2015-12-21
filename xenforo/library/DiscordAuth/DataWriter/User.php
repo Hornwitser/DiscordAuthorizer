@@ -3,8 +3,6 @@
 class DiscordAuth_DataWriter_User
     extends XFCP_DiscordAuth_DataWriter_User
 {
-    private $discordId;
-
     protected function _getFields()
     {
         $fields = parent::_getFields();
@@ -64,38 +62,28 @@ class DiscordAuth_DataWriter_User
 
         // Todo: Catch eceptions and log them.
     }
-/*
-    public function _preSave()
-    {
-        parent::_preSave();
 
-        // Hmm...  This needs more testing
-    }
-*/
-    public function _postSave()
+    public function _postSaveAfterTransaction()
     {
-        parent::_postSave();
+        parent::_postSaveAfterTransaction();
 
-        $userId = $this->getExisting('da_discord_id');
-        if ($userId !== null) {
-            self::refreshDiscordId($userId);
+        $discordId = $this->getExisting('da_discord_id');
+        if ($discordId !== null) {
+            self::refreshDiscordId($discordId);
         }
     }
-/*
-    public function _preDelete()
-    {
-        parent::_preDelete();
 
-        $this->discordId = $this->getExisting('da_discord_id');
-    }
-*/
-    public function _postDelete()
+    // Unfortunately there's no _postDeleteAfterTransaction
+    public function delete()
     {
-        parent::_postDelete();
+        $discordId = $this->getExisting('da_discord_id');
 
-        $userId = $this->getExisting('da_discord_id');
-        if ($userId !== null) {
-            self::refreshDiscordId($userId);
+        $result = parent::delete();
+
+        if ($result && $discordId !== null) {
+            self::refreshDiscordId($discordId);
         }
+
+        return $result;
     }
 }
