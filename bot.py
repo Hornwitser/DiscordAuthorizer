@@ -157,7 +157,8 @@ class ForumBot(Client):
                     return
 
                 # Check if another user is already linked to this account
-                sql = "SELECT da_discord_id FROM xf_user WHERE user_id = %s"
+                sql = ("SELECT da_discord_id FROM xf_user "
+                       "WHERE user_id = %s AND da_discord_id IS NOT NULL")
                 cursor.execute(sql, (user_id,))
                 if cursor.rowcount:
                     refresh.append(cursor.fetchone()['da_discord_id'])
