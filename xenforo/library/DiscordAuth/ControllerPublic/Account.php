@@ -8,6 +8,17 @@ class DiscordAuth_ControllerPublic_Account
         return $this->getModelFromCache('DiscordAuth_Model_Token');
     }
 
+    protected static function generateToken()
+    {
+        $buf = mcrypt_create_iv(12, MCRYPT_DEV_URANDOM);
+        if ($buf === false) {
+            throw new Exception("Unable to securly generate token");
+            // Todo: Use XenForo error notification system instead
+        }
+
+        return base64_encode($buf);
+    }
+
     public function actionDiscord()
     {
         $tokenModel = $this->_getTokenModel();
@@ -42,13 +53,7 @@ class DiscordAuth_ControllerPublic_Account
         );
 
         if (strlen($generate)) {
-            /* If you're using any of this code in your website you
-               deserve to get pwned.  The following token generation
-               code is not safe for use outside of a testing setup
-               and should *NOT* be used. */
-            $token = str_pad(dechex(rand()), 16, 'x', STR_PAD_LEFT);
-            // TODO: proper token generation
-
+            $token = self::generateToken();
             $dw = XenForo_DataWriter::create('DiscordAuth_DataWriter_Token');
             $existing = $tokenModel->getTokenByUserId($visitor['user_id']);
             if ($existing !== false) {
