@@ -46,7 +46,7 @@ class DiscordAuth_Addon
     }
 
     protected static $table_create = "
-        CREATE TABLE IF NOT EXISTS `xf_da_token` (
+        CREATE TABLE `xf_da_token` (
             `user_id` INT UNSIGNED NOT NULL,
             `token` CHAR(16) NOT NULL,
             `issued` TIMESTAMP NOT NULL,
@@ -73,19 +73,22 @@ class DiscordAuth_Addon
             DROP COLUMN `da_discord_id`
     ";
 
-    public static function install()
+    public static function install($addOn)
     {
-        $db = XenForo_Application::get('db');
-        $db->query(self::$table_create);
+        $version = is_array($addOn) ? $addOn['version_id'] : 0;
 
-        $column = $db->fetchOne(self::$column_show);
-        if ($column === false) {
+        if ($version < 1) { // AddOn is not installed
+            $db = XenForo_Application::get('db');
+            $db->query(self::$table_create);
             $db->query(self::$column_create);
         }
     }
 
     public static function uninstall()
     {
+        // The uninstall actions fail gracefully if the modifications
+        // are not present in the database.
+
         $db = XenForo_Application::get('db');
         $db->query(self::$table_drop);
 
