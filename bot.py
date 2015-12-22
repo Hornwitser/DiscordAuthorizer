@@ -182,6 +182,7 @@ class ForumBot(Client):
             return set()
 
         mapping = self.config['group_mapping']
+        override = self.config['group_override']
         managed_roles = set(mapping.values())
         forum_ids = set([row['user_group_id']])
         if row['secondary_group_ids']:
@@ -192,6 +193,9 @@ class ForumBot(Client):
                 logging.error("Parsing group ids '{}' on discord user {} "
                               "failed.".format(row['secondary_group_ids'],
                                                member.id))
+        override_ids = {oid for fid, overrides in override.items()
+                            if fid in forum_ids for oid in overrides}
+        forum_ids = {id for id in forum_ids if id not in override_ids}
         have_ids = {mapping[i] for i in forum_ids if i in mapping}
 
         keep = [r for r in member.roles if r.id not in managed_roles]
@@ -343,6 +347,13 @@ class ForumBot(Client):
             "key-convert": int,
             "value-convert": Role,
             "value-key": lambda r: r.id,
+        },
+        "group_override": {
+            "type": dict,
+            "key-convert": int,
+            "value-convert": int,
+            "value-key": lambda l: set(l),
+            "list": True,
         }
     }
 
@@ -397,7 +408,7 @@ class ForumBot(Client):
         return "Removed ({}) from {}.".format(", ".join(removals), prop)
 
     @command
-    def bind(self, prop: str, key, value, *, server: Server):
+    def bind(self, prop: str, key, *value, server: Server):
         """Bind a value to a key in a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -410,7 +421,15 @@ class ForumBot(Client):
             key = convert(server, 'key', desc['key-convert'], key)
 
         if 'value-convert' in desc:
-            value = convert(server, 'value', desc['value-convert'], value)
+            value = [convert(server, 'value', desc['value-convert'], v)
+                         for v in value]
+
+        if not desc.get('list', False):
+            if len(value) == 1:
+                value = value[0]
+            else:
+                return "Extranous parameters"
+
         if 'value-key' in desc:
             value = desc['value-key'](value)
 
