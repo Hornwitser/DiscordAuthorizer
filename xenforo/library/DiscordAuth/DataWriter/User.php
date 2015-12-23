@@ -63,7 +63,7 @@ class DiscordAuth_DataWriter_User
         // Todo: Catch eceptions and log them.
     }
 
-    public function _postSave()
+    protected function _postSave()
     {
         parent::_postSave();
 
@@ -78,7 +78,7 @@ class DiscordAuth_DataWriter_User
         }
     }
 
-    public function _postDelete()
+    protected function _postDelete()
     {
         parent::_postDelete();
 
