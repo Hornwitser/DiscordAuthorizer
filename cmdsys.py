@@ -75,9 +75,13 @@ def split(string):
     # Turn the sequence of literals into a list of strings
     return list(map(lambda l: l.characters, split))
 
-def command(func):
-    func.is_command = True
-    return func
+def command(func=None, **kwargs):
+    def dec(func):
+        func.is_command = True
+        func.is_hidden = kwargs.get('hidden', False)
+        return func
+
+    return dec if func is None else dec(func)
 
 def is_command(func):
     return getattr(func, "is_command", False)

@@ -286,6 +286,7 @@ class ForumBot(Client):
 
         text = "Available commands:\n"
         for command in sorted(commands):
+            if getattr(self, command).is_hidden: continue
             params = []
             for param in signature(getattr(self, command)).parameters.values():
                 if (param.kind != param.POSITIONAL_OR_KEYWORD
@@ -462,7 +463,7 @@ class ForumBot(Client):
         else:
             return str(self.config[prop])
 
-    @command
+    @command(hidden=True)
     def debug(self, *code: str, author: User, msg: Message, ch: Channel):
         """Evaluate an arbitrary python expression"""
         try:
