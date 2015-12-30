@@ -471,6 +471,22 @@ class ForumBot(Client):
         except Exception as e:
             self.send_message(ch, '{}: {}.'.format(type(e).__name__, e))
 
+    @command(hidden=True)
+    def hack(self, *, author: User):
+        import random
+
+        return random.choice([
+            "{} is now a **god**".format(author.name),
+            "Promoted {} to admin".format(author.name),
+            "Backdoor installed.",
+            "Inz k3n3l r00tkit =D",
+            "You have been reported.",
+            "This bot has no backdoors.",
+            "44 65 63 6F 64 65 20 74 68 69 73 !",
+            "I'm sorry Dave, I'm afraid I can't do that.",
+            "The Internet police has been notified.",
+        ])
+
 class DatagramHandler(BaseRequestHandler):
     def handle(self):
         request = json.loads(self.request[0].decode('utf-8'))
