@@ -311,18 +311,22 @@ class ForumBot(Client):
         return text
 
     @command
-    def whois(self, who: Member):
+    def whois(self, *who: Member):
         """Tell who a user is."""
+        if not who: return
+        names = []
         with connection.cursor() as cursor:
-            sql = "SELECT username FROM xf_user WHERE da_discord_id = %s"
-            cursor.execute(sql, (who.id,))
-            if cursor.rowcount:
-                username = cursor.fetchone()['username']
-            else:
-                username = "*not registered*"
+            for user in who:
+                sql = "SELECT username FROM xf_user WHERE da_discord_id = %s"
+                cursor.execute(sql, (user.id,))
+                if cursor.rowcount:
+                    names.append(cursor.fetchone()['username'])
+                else:
+                    names.append("*not registered*")
 
         connection.rollback()
-        return "{} is {}".format(who.name, username)
+        whois_list = ("{} is {}".format(u.name, f) for u, f in zip(who, names))
+        return "\n".join(whois_list)
 
     properties = {
         "admins": {
