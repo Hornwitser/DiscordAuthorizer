@@ -317,6 +317,10 @@ class ForumBot(Client):
         names = []
         with connection.cursor() as cursor:
             for user in who:
+                if user == self.user:
+                    names.append('**{}**'.format(config['bot_name']))
+                    continue
+
                 sql = "SELECT username FROM xf_user WHERE da_discord_id = %s"
                 cursor.execute(sql, (user.id,))
                 if cursor.rowcount:
