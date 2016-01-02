@@ -13,7 +13,6 @@ class DiscordAuth_ControllerPublic_Account
         $buf = mcrypt_create_iv(12, MCRYPT_DEV_URANDOM);
         if ($buf === false) {
             throw new Exception("Unable to securly generate token");
-            // Todo: Use XenForo error notification system instead
         }
 
         return base64_encode($buf);
@@ -65,11 +64,16 @@ class DiscordAuth_ControllerPublic_Account
                     $dw->setExistingData($existing, true);
                 }
 
-                $dw->set('user_id', $visitor['user_id']);
-                $dw->set('token', self::generateToken());
-                $dw->save();
-            }
+                try {
+                    $dw->set('user_id', $visitor['user_id']);
+                    $dw->set('token', self::generateToken());
+                    $dw->save();
 
+                // self::generateToken may throw Exception
+                } catch (Exception $e) {
+                    XenForo_Error::logException($e, false);
+                }
+            }
         }
 
         $unlink = $this->_input->filterSingle(
