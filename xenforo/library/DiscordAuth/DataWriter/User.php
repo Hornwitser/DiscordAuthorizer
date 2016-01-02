@@ -15,29 +15,27 @@ class DiscordAuth_DataWriter_User
 
     private function refreshDiscordId($discordId)
     {
-        XenForo_Error::debug("Refreshing user $discordId");
         $options = XenForo_Application::get('options');
         if ($options->botSocket === '') {
-            XenForo_Error::debug("Bot socket not configured");
             return;
         }
+
+        XenForo_Error::debug("Refreshing user $discordId");
 
         $so = socket_create(AF_UNIX, SOCK_DGRAM, 0);
         if ($so === false) {
             $msg = socket_strerror(socket_last_error());
             $error = "Bot socket create failed: $msg";
-            XenForo_Error::logException(new Exception($error));
-            // Note: XenForo_Error::logError(...) is broken
-            return;
+
+            throw new Exception($error);
         }
 
         $res = socket_connect($so, $options->botSocket);
         if ($res === false) {
             $msg = socket_strerror(socket_last_error());
             $error = "Bot socket connect failed: $msg";
-            XenForo_Error::logException(new Exception($error));
-            // Note: XenForo_Error::logError(...) is broken
-            return;
+
+            throw new Exception($error);
         }
 
         $payload = json_encode(array(
@@ -46,21 +44,20 @@ class DiscordAuth_DataWriter_User
         ));
 
         $res = socket_write($so, $payload);
-        if ($res === false) {
-            $error = "Bot socket send failed";
-            XenForo_Error::logException(new Exception($error));
-            // Note: XenForo_Error::logError(...) is broken
-
-        } else if ($res < strlen($payload)) {
-            $error = "Bot socket did not send all data";
-            XenForo_Error::logException(new Exception($error));
-            // Note: XenForo_Error::logError(...) is broken
-        }
-
         socket_shutdown($so);
         socket_close($so);
 
-        // Todo: Catch eceptions and log them.
+        if ($res === false) {
+            $error = "Bot socket send failed";
+
+            throw new Exception($error);
+
+        } else if ($res < strlen($payload)) {
+            // This will probably never happen.
+            $error = "Bot socket did not send all data";
+
+            throw new Exception($error);
+        }
     }
 
     protected function _postSave()
@@ -72,7 +69,11 @@ class DiscordAuth_DataWriter_User
             XenForo_CodeEvent::addListener(
                 'controller_post_dispatch',
                 function ($c, $r, $n, $a) use ($discordId) {
-                    self::refreshDiscordId($discordId);
+                    try {
+                        self::refreshDiscordId($discordId);
+                    } catch (Exception $e) {
+                        XenForo_Error::logException($e, false);
+                    }
                 }
             );
         }
@@ -87,7 +88,11 @@ class DiscordAuth_DataWriter_User
             XenForo_CodeEvent::addListener(
                 'controller_post_dispatch',
                 function ($c, $r, $n, $a) use ($discordId) {
-                    self::refreshDiscordId($discordId);
+                    try {
+                        self::refreshDiscordId($discordId);
+                    } catch (Exception $e) {
+                        XenForo_Error::logException($e, false);
+                    }
                 }
             );
         }
