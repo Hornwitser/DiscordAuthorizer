@@ -84,7 +84,7 @@ class DiscordAuth_DataWriter_User
         parent::_postDelete();
 
         $discordId = $this->getExisting('da_discord_id');
-        if ($result && $discordId !== null) {
+        if ($discordId !== null) {
             XenForo_CodeEvent::addListener(
                 'controller_post_dispatch',
                 function ($c, $r, $n, $a) use ($discordId) {
