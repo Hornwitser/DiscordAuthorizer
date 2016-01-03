@@ -76,7 +76,7 @@ button.
     <phrase title="option_botSocket" version_id="1" version_string="0.0.1"><![CDATA[Bot Communication Socket]]></phrase>
     <phrase title="option_botSocket_explain" version_id="1" version_string="0.0.2-alpha"><![CDATA[Unix domain socket to the Discord Bot that manages the roles. Rapid role updates will be disabled if this is left blank.]]></phrase>
     <phrase title="option_discordInvite" version_id="1" version_string="0.0.2-alpha"><![CDATA[Discord Server Invite]]></phrase>
-    <phrase title="option_discordInvite_explain" version_id="1" version_string="0.0.2-alpha"><![CDATA[An invitation link shown in the Discord Server page.  Left out if blank.]]></phrase>
+    <phrase title="option_discordInvite_explain" version_id="2" version_string="0.2.0"><![CDATA[An invitation link shown in the Discord Server page. Left out if blank.]]></phrase>
     <phrase title="option_group_discordauthOptions" version_id="1" version_string="0.0.2-alpha"><![CDATA[Discord Authorizer Addon]]></phrase>
     <phrase title="option_group_discordauthOptions_description" version_id="1" version_string="0.0.1"><![CDATA[]]></phrase>
     <phrase title="option_validPeriod" version_id="1" version_string="0.0.1-alpha"><![CDATA[Token Lifetime]]></phrase>
@@ -86,7 +86,8 @@ button.
   <route_prefixes/>
   <style_properties/>
   <templates>
-    <template title="discordauth_account_discord" version_id="1" version_string="0.0.2-alpha"><![CDATA[<xen:title>{xen:phrase discordauth_discord_server}</xen:title>
+    <template title="discordauth_account_discord" version_id="2" version_string="0.2.0"><![CDATA[
+<xen:title>{xen:phrase discordauth_discord_server}</xen:title>
 
 <xen:require css="account.css" />
 
@@ -130,7 +131,7 @@ button.
 
 	<input type="hidden" name="_xfToken" value="{$visitor.csrf_token_page}" />
 </form>
-	]]></template>
+]]></template>
     <template title="discordauth_account_wrapper_sidebar" version_id="2" version_string="0.2.0"><![CDATA[
 <xen:if is="{$canLinkDiscord}">
     <li>
