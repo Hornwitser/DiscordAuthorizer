@@ -20,8 +20,13 @@ class DiscordAuth_ControllerPublic_Account
 
     public function actionDiscord()
     {
-        $tokenModel = $this->_getTokenModel();
         $visitor = XenForo_Visitor::getInstance();
+
+        if (!$visitor->hasPermission('general', 'linkDiscord')) {
+            return $this->responseNoPermission();
+        }
+
+        $tokenModel = $this->_getTokenModel();
         $token = $tokenModel->getTokenByUserId($visitor['user_id']);
 
         if ($token !== false && !$token['valid']) {
@@ -46,8 +51,13 @@ class DiscordAuth_ControllerPublic_Account
     {
         $this->_assertPostOnly();
 
-        $tokenModel = $this->_getTokenmodel();
         $visitor = XenForo_Visitor::getInstance();
+
+        if (!$visitor->hasPermission('general', 'linkDiscord')) {
+            return $this->responseNoPermission();
+        }
+
+        $tokenModel = $this->_getTokenmodel();
 
         $generate = $this->_input->filterSingle(
             'create',

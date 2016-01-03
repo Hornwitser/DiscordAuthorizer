@@ -7,6 +7,8 @@
   <admin_template_modifications/>
   <code_events/>
   <code_event_listeners>
+    <listener event_id="container_public_params" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="containerPublicParams" active="1" hint="" description="Add canLinkDiscord parameter"/>
+    <listener event_id="load_class" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="loadClassListener" active="1" hint="XenForo_ControllerHelper_Account" description="Extends Account helper"/>
     <listener event_id="load_class_controller" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="loadClassListener" active="1" hint="XenForo_ControllerPublic_Account" description="Extends Acount controller"/>
     <listener event_id="load_class_datawriter" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="loadClassListener" active="1" hint="XenForo_DataWriter_User" description="Extends User datawriter"/>
     <listener event_id="template_hook" execute_order="10" callback_class="DiscordAuth_Addon" callback_method="templateHookListener" active="1" hint="" description="Hooks into account tabs"/>
@@ -37,7 +39,9 @@
   </optiongroups>
   <permissions>
     <permission_groups/>
-    <permissions/>
+    <permissions>
+      <permission permission_group_id="general" permission_id="linkDiscord" permission_type="flag" default_value="unset" interface_group_id="generalPermissions" display_order="200"/>
+    </permissions>
     <interface_groups/>
   </permissions>
   <phrases>
@@ -77,6 +81,7 @@ button.
     <phrase title="option_group_discordauthOptions_description" version_id="1" version_string="0.0.1"><![CDATA[]]></phrase>
     <phrase title="option_validPeriod" version_id="1" version_string="0.0.1-alpha"><![CDATA[Token Lifetime]]></phrase>
     <phrase title="option_validPeriod_explain" version_id="1" version_string="0.0.1-alpha"><![CDATA[The period in minutes a toked in valid before it expires.]]></phrase>
+    <phrase title="permission_general_linkDiscord" version_id="1" version_string="0.1.0"><![CDATA[Link with Discord]]></phrase>
   </phrases>
   <route_prefixes/>
   <style_properties/>
@@ -126,14 +131,20 @@ button.
 	<input type="hidden" name="_xfToken" value="{$visitor.csrf_token_page}" />
 </form>
 	]]></template>
-    <template title="discordauth_account_wrapper_sidebar" version_id="1" version_string="0.0.1-alpha"><![CDATA[<li>
-    <a class="{xen:if "{$selectedKey} == 'account/discord'", 'secondaryContent', 'primaryContent'}"
-       href="{xen:link account/discord}">
-        {xen:phrase discordauth_discord_server}
-    </a>
-</li>
+    <template title="discordauth_account_wrapper_sidebar" version_id="2" version_string="0.2.0"><![CDATA[
+<xen:if is="{$canLinkDiscord}">
+    <li>
+        <a class="{xen:if "{$selectedKey} == 'account/discord'", 'secondaryContent', 'primaryContent'}"
+           href="{xen:link account/discord}">
+            {xen:phrase discordauth_discord_server}
+        </a>
+    </li>
+</xen:if>
 ]]></template>
-    <template title="discordauth_navigation_tab_link" version_id="1" version_string="0.0.1-alpha"><![CDATA[<li><a href="{xen:link account/discord}">{xen:phrase discordauth_discord_server}</a></li>
+    <template title="discordauth_navigation_tab_link" version_id="2" version_string="0.2.0"><![CDATA[
+<xen:if is="{$canLinkDiscord}">
+    <li><a href="{xen:link account/discord}">{xen:phrase discordauth_discord_server}</a></li>
+</xen:if>
 ]]></template>
   </templates>
   <public_template_modifications/>

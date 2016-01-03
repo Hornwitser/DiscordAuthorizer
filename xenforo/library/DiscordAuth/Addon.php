@@ -42,7 +42,23 @@ class DiscordAuth_Addon
             case 'XenForo_ControllerPublic_Account':
                 $extend[] = 'DiscordAuth_ControllerPublic_Account';
                 break;
+
+            case 'XenForo_ControllerHelper_Account':
+                $extend[] = 'DiscordAuth_ControllerHelper_Account';
+                break;
         }
+    }
+
+    public static function containerPublicParams(
+        &$params,
+        XenForo_Dependencies_Abstract $dependencies
+    ) {
+        // Add canLinkDiscord parameter to the public container, which
+        // is used by the discordauth_navigation_tab_link template
+
+        $visitor = XenForo_Visitor::getInstance();
+        $canLinkDiscord = $visitor->hasPermission('general', 'linkDiscord');
+        $params['canLinkDiscord'] = $canLinkDiscord;
     }
 
     protected static $table_create = "
