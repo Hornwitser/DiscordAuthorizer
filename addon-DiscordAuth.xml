@@ -45,7 +45,25 @@
     <phrase title="discordauth_authorization_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Authorization Token]]></phrase>
     <phrase title="discordauth_discord_server" version_id="1" version_string="0.0.1-alpha"><![CDATA[Discord Server]]></phrase>
     <phrase title="discordauth_generate_token" version_id="1" version_string="0.0.1-alpha"><![CDATA[Generate Token]]></phrase>
-    <phrase title="discordauth_introduction" version_id="1" version_string="0.0.2-alpha"><![CDATA[The discord server associated with this forum is protected by an authorization bot that only allows users from the forum to enter it. In order to take part of it you must generate a token below and sent it to the authorization bot.]]></phrase>
+    <phrase title="discordauth_introduction" version_id="2" version_string="0.2.0"><![CDATA[
+This forum offers access to its Discord voice and text chat server
+as a convenience to its users. This server is intended for use only by
+the members of this forum, and is therefore protected with an
+authorization system. In order to gain access to this service, please
+complete the following steps:
+
+<ol style="margin: 1em 0 1em 1.5em">
+    <li style="list-style: decimal">Click the “Generate Token” button, and copy your token.</li>
+    <li style="list-style: decimal">Click the “Join Server” button to connect to Discord.</li>
+    <li style="list-style: decimal">Once connected, send a direct message (on Discord) to the
+    authorization bot containing only the token you copied.</li>
+</ol>
+
+Upon completing these steps, you will automatically be authorized
+on our Discord server. If you suspect your Discord account is ever
+compromised, you may revoke access using the “Revoke Authorization”
+button.
+]]></phrase>
     <phrase title="discordauth_invite" version_id="1" version_string="0.0.2-alpha"><![CDATA[Invite]]></phrase>
     <phrase title="discordauth_join_server" version_id="1" version_string="0.0.2-alpha"><![CDATA[Join Server]]></phrase>
     <phrase title="discordauth_linked_with" version_id="1" version_string="0.0.1-alpha"><![CDATA[Linked with]]></phrase>
