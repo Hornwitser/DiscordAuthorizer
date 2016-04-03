@@ -7,7 +7,8 @@ CREATE TABLE xenauth.xf_user (
     da_discord_id VARCHAR(24) NULL UNIQUE,
     user_group_id INT(10) NOT NULL,
     secondary_group_ids VARBINARY(255) NOT NULL,
-    is_banned TINYINT(3) NOT NULL DEFAULT 0
+    is_banned TINYINT(3) NOT NULL DEFAULT 0,
+    web_pw VARCHAR(64) NULL
 );
 
 -- Token storage
