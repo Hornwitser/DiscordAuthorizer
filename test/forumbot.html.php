@@ -28,7 +28,7 @@ function refresh_user($discord_id) {
         } else {
             $payload = json_encode(array(
                 'action' => 'refresh',
-                'discord_id' => $discord_id,
+                'user_id' => $discord_id,
             ));
 
             $res = socket_write($so, $payload);
