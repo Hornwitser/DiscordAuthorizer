@@ -1,3 +1,5 @@
+from aiohttp import ClientError
+from asyncio import get_event_loop, sleep
 import atexit
 from inspect import signature
 import json
@@ -6,8 +8,10 @@ import os
 from socketserver import UnixDatagramServer, BaseRequestHandler
 from threading import Thread
 
-from discord import Channel, Client, Member, Message, Role, Server, User, utils
+from discord import Channel, Client, Member, Message, Role, Server, User, \
+                    utils, HTTPException, GatewayNotFound
 import pymysql
+from websockets import InvalidHandshake, WebSocketProtocolError
 
 from utils import PeriodicTimer
 from cmdsys import command, is_command, get_commands, invoke_command, split
@@ -24,6 +28,25 @@ class ForumBot(Client):
         self.sync_timer = PeriodicTimer(config['db_sync_interval'],
                                         self.dispatch, args=('sync_database',))
         self.sync_timer.start()
+
+    # This is a hack to deal with connect() closing the Client object
+    # while there being no way to unclose it, forcing one to recreate
+    # the whole thing.
+    async def sane_connect(self):
+        self.gateway = await self._get_gateway()
+        await self._make_websocket()
+
+        while not self.is_closed:
+            msg = await self.ws.recv()
+            if msg is None:
+                if self.ws.close_code == 1012:
+                    await self.redirect_websocket(self.gateway)
+                    continue
+                else:
+                    # Connection was dropped, break out
+                    break
+
+            await self.received_message(msg)
 
     # This is a rather hackish way to get arround the problem of there
     # being no sane way to propogate exception from a thread to the
@@ -73,7 +96,7 @@ class ForumBot(Client):
         else:
             return 'ignore'
 
-    def on_message(self, msg):
+    async def on_message(self, msg):
         if msg.author == self.user:
             return
 
@@ -81,14 +104,14 @@ class ForumBot(Client):
             if msg.author in self.bot_server.members:
                 token = msg.content.strip()
                 if len(token) == 16:
-                    self.try_token(msg.author, token)
+                    await self.try_token(msg.author, token)
                 else:
-                    self.send_message(msg.channel, "That does not look like "
-                                      "an access token.")
+                    await self.send_message(msg.channel, "That does not look "
+                                            "like an access token.")
             else:
                 if msg.channel.id not in self.informed:
-                    self.send_message(msg.channel, "I am a bot and I don't "
-                                      "serve you.")
+                    await self.send_message(msg.channel, "I am a bot and I "
+                                            "don't serve you.")
                     self.informed.update([msg.channel.id])
 
         else:
@@ -106,21 +129,21 @@ class ForumBot(Client):
             action = self.resolve_permission(msg.server, role, cmd)
             if action == 'allow':
                 try:
-                    response = invoke_command(func, msg, args)
+                    response = await invoke_command(func, msg, args)
                 except Exception as e:
-                    self.send_message(msg.channel, "Error: {}".format(e))
+                    await self.send_message(msg.channel, "Error: {}".format(e))
                 else:
                     if response is not None:
-                        self.send_message(msg.channel, response)
+                        await self.send_message(msg.channel, response)
 
             elif action == 'deny':
-                self.send_message(msg.channel, "You do not have permission to "
-                                  "use this command.")
+                await self.send_message(msg.channel, "You do not have "
+                                        "permission to use this command.")
 
-    def on_member_join(self, member):
-        self.refresh_id(member.id)
+    async def on_member_join(self, member):
+        await self.refresh_id(member.id)
 
-    def try_token(self, user, token):
+    async def try_token(self, user, token):
         refresh = []
         try:
             with connection.cursor() as cursor:
@@ -139,10 +162,10 @@ class ForumBot(Client):
                     connection.commit()
 
                     if not valid:
-                        self.send_message(user, "This token has expired.")
+                        await self.send_message(user, "This token is expired.")
                         return
                 else:
-                    self.send_message(user, "This token is not valid.")
+                    await self.send_message(user, "This token is not valid.")
                     connection.rollback()
                     return
 
@@ -151,8 +174,9 @@ class ForumBot(Client):
                 cursor.execute(sql, (user.id,))
                 if cursor.rowcount:
                     username = cursor.fetchone()['username']
-                    self.send_message(user, "This Discord account is already "
-                                      "linked to '{}'.".format(username))
+                    await self.send_message(user, "This Discord account is "
+                                            "already linked to '{}'."
+                                            "".format(username))
                     connection.rollback()
                     return
 
@@ -173,9 +197,9 @@ class ForumBot(Client):
 
         finally:
             for user_id in refresh:
-                self.refresh_id(user_id)
+                await self.refresh_id(user_id)
 
-        self.send_message(user, "Authorisation successful.")
+        await self.send_message(user, "Authorisation successful.")
 
     def mapped_roles(self, member, row):
         if row['is_banned']:
@@ -203,7 +227,7 @@ class ForumBot(Client):
         return set(keep) | set(have)
 
 
-    def sync_database(self):
+    async def sync_database(self):
         if not self.is_logged_in:
             return
 
@@ -223,30 +247,30 @@ class ForumBot(Client):
                 row = accounts[member.id]
                 roles = self.mapped_roles(member, row)
                 if roles != set(member.roles):
-                    self.replace_roles(member, *roles)
+                    await self.replace_roles(member, *roles)
                     changes += 1
 
             else:
                 roles = [r for r in member.roles if r.id in managed_roles]
                 if roles:
-                    self.remove_roles(member, *roles)
+                    await self.remove_roles(member, *roles)
                     changes += 1
 
         return changes
 
-    def on_sync_database(self):
-        self.sync_database()
+    async def on_sync_database(self):
+        await self.sync_database()
 
     @command
-    def sync(self):
+    async def sync(self):
         """Trigger a database syncronisation"""
-        changes = self.sync_database()
+        changes = await self.sync_database()
         if changes:
             return "{} user{} updated.".format(changes, 's'*(changes != 1))
         else:
             return "No changes."
 
-    def refresh_id(self, user_id):
+    async def refresh_id(self, user_id):
         """Refresh the authorizations given to a user"""
         member = utils.find(lambda u: u.id == user_id, self.bot_server.members)
         if member is not None:
@@ -263,18 +287,18 @@ class ForumBot(Client):
                 # Get managed roles for the member and update if needed
                 roles = self.mapped_roles(member, row)
                 if roles != set(member.roles):
-                    self.replace_roles(member, *roles)
+                    await self.replace_roles(member, *roles)
             else:
                 # Member is not registered, remove all managed roles
                 roles = [r for r in member.roles if r.id in managed_roles]
                 if roles:
-                    self.remove_roles(member, *roles)
+                    await self.remove_roles(member, *roles)
 
-    def on_refresh_id(self, user_id):
-        self.refresh_id(user_id)
+    async def on_refresh_id(self, user_id):
+        await self.refresh_id(user_id)
 
     @command
-    def help(self, what: str=None, *,  author: User):
+    async def help(self, what: str=None, *,  author: User):
         """Show this help text."""
         role = self.get_role(author)
         if role == 'master':
@@ -311,7 +335,7 @@ class ForumBot(Client):
         return text
 
     @command
-    def whois(self, *who: Member):
+    async def whois(self, *who: Member):
         """Tell who a user is."""
         if not who: return
         names = []
@@ -367,7 +391,7 @@ class ForumBot(Client):
     }
 
     @command
-    def add(self, prop: str, *values, server: Server):
+    async def add(self, prop: str, *values, server: Server):
         """Add items to a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -395,7 +419,7 @@ class ForumBot(Client):
         return "Added ({}) to {}.".format(", ".join(additions), prop)
 
     @command
-    def remove(self, prop: str, *values, server: Server):
+    async def remove(self, prop: str, *values, server: Server):
         """Remove items from a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -417,7 +441,7 @@ class ForumBot(Client):
         return "Removed ({}) from {}.".format(", ".join(removals), prop)
 
     @command
-    def bind(self, prop: str, key, *value, server: Server):
+    async def bind(self, prop: str, key, *value, server: Server):
         """Bind a value to a key in a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -447,7 +471,7 @@ class ForumBot(Client):
         return "Bound {} to {} in {}.".format(value, key, prop)
 
     @command
-    def unbind(self, prop: str, key):
+    async def unbind(self, prop: str, key):
         """Remove a key value pair in a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -464,7 +488,7 @@ class ForumBot(Client):
         return "Removed {} from {}.".format(key, prop)
 
     @command
-    def show(self, prop: str):
+    async def show(self, prop: str):
         """Show a property"""
         if prop not in self.properties:
             return "{} is not a property".format(prop)
@@ -472,15 +496,15 @@ class ForumBot(Client):
             return str(self.config[prop])
 
     @command(hidden=True)
-    def debug(self, *code: str, author: User, msg: Message, ch: Channel):
+    async def debug(self, *code: str, author: User, msg: Message, ch: Channel):
         """Evaluate an arbitrary python expression"""
         try:
-            self.send_message(ch, eval(' '.join(code)))
+            await elf.send_message(ch, eval(' '.join(code)))
         except Exception as e:
-            self.send_message(ch, '{}: {}.'.format(type(e).__name__, e))
+            await self.send_message(ch, '{}: {}.'.format(type(e).__name__, e))
 
     @command(hidden=True)
-    def hack(self, *, author: User):
+    async def hack(self, *, author: User):
         import random
 
         return random.choice([
@@ -543,12 +567,32 @@ if __name__ == '__main__':
                                  cursorclass=pymysql.cursors.DictCursor)
 
     bot = ForumBot(config)
-    bot.login(config['bot_user'], config['bot_password'])
 
     server = SocketServer(bot, config)
     server.start()
 
-    try:
-        bot.run()
-    finally:
-        write_config(config)
+    loop = get_event_loop()
+
+    while True:
+        try:
+            task = bot.login(config['bot_user'], config['bot_password'])
+            loop.run_until_complete(task)
+
+        except (HTTPException, ClientError):
+            logging.exception("Failed to log in to Discord")
+            loop.run_until_complete(sleep(10))
+
+        else:
+            break
+
+    while not bot.is_closed:
+        try:
+            loop.run_until_complete(bot.sane_connect())
+
+        except (HTTPException, ClientError, GatewayNotFound,
+                InvalidHandshake, WebSocketProtocolError):
+            logging.exception("Lost connection with Discord")
+            loop.run_until_complete(sleep(10))
+
+        finally:
+            write_config(config)

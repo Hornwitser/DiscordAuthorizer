@@ -174,7 +174,7 @@ def parameters(func):
 
     raise TypeError("Extraneous parameters")
 
-def invoke_command(func, msg, args):
+async def invoke_command(func, msg, args):
     args = [convert_param(msg.server, param, value) for value, param
                 in zip(args, parameters(func))]
 
@@ -196,4 +196,4 @@ def invoke_command(func, msg, args):
             elif param.annotation is Message:
                 kwargs[param.name] = msg
 
-    return func(*args, **kwargs)
+    return await func(*args, **kwargs)
