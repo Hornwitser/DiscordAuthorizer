@@ -56,7 +56,7 @@ if ($mysqli->connect_errno) {
 if (isset($_GET['create'])) {
     $name = $mysqli->real_escape_string($_GET['username']);
     $res = $mysqli->query(
-        "INSERT INTO xf_users SET username = '$name', user_group_id = 1, ".
+        "INSERT INTO xf_user SET username = '$name', user_group_id = 1, ".
         "secondary_group_ids = '', is_banned = 0"
     );
 
@@ -77,8 +77,8 @@ if (isset($_GET['create'])) {
     $name = $mysqli->real_escape_string($_GET['username']);
     $res = $mysqli->query(
         "SELECT x.user_id, NOW() < TIMESTAMPADD(MINUTE, $expire, issued), ".
-        "token, discord_id, user_group_id, secondary_group_ids, is_banned ".
-        "FROM xf_users AS x LEFT JOIN discord_tokens AS d ".
+        "token, da_discord_id, user_group_id, secondary_group_ids, is_banned ".
+        "FROM xf_user AS x LEFT JOIN xf_da_token AS d ".
         "ON x.user_id = d.user_id WHERE username = '$name'"
     );
 
@@ -94,7 +94,7 @@ if (isset($_GET['create'])) {
         $logged_in = true;
         if (isset($_GET['revoke'])) {
             $res = $mysqli->query(
-                "UPDATE xf_users SET discord_id = NULL ".
+                "UPDATE xf_user SET da_discord_id = NULL ".
                 "WHERE user_id = $user_id"
             );
 
@@ -114,7 +114,7 @@ if (isset($_GET['create'])) {
                and should *NOT* be used. */
             $token = str_pad(dechex(rand()), 16, 'x', STR_PAD_LEFT);
             $res = $mysqli->query(
-                "INSERT INTO discord_tokens ".
+                "INSERT INTO xf_da_token ".
                 "SET user_id = $user_id, token = '$token' ON DUPLICATE KEY ".
                 "UPDATE token = '$token'"
             );
@@ -131,7 +131,7 @@ if (isset($_GET['create'])) {
             $sids = $mysqli->real_escape_string($_GET['secondary_ids']);
             $banned = (int)isset($_GET['banned']);
             $res = $mysqli->query(
-                "UPDATE xf_users SET user_group_id = $gid, ".
+                "UPDATE xf_user SET user_group_id = $gid, ".
                 "secondary_group_ids = '$sids', is_banned = $banned ".
                 "WHERE user_id = $user_id"
             );
