@@ -499,7 +499,7 @@ class ForumBot(Client):
     async def debug(self, *code: str, author: User, msg: Message, ch: Channel):
         """Evaluate an arbitrary python expression"""
         try:
-            await elf.send_message(ch, eval(' '.join(code)))
+            await self.send_message(ch, eval(' '.join(code)))
         except Exception as e:
             await self.send_message(ch, '{}: {}.'.format(type(e).__name__, e))
 
