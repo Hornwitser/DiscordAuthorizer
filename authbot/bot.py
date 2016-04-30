@@ -575,7 +575,7 @@ if __name__ == '__main__':
 
     while True:
         try:
-            task = bot.login(config['bot_user'], config['bot_password'])
+            task = bot.login(config['bot_token'])
             loop.run_until_complete(task)
 
         except (HTTPException, ClientError):
