@@ -9,7 +9,9 @@ from socketserver import UnixDatagramServer, BaseRequestHandler
 from threading import Thread
 
 from discord import Channel, Client, Member, Message, Role, Server, User, \
-                    utils, HTTPException, GatewayNotFound
+                    utils, HTTPException, GatewayNotFound, ConnectionClosed
+from discord.gateway import DiscordWebSocket, ReconnectWebSocket
+
 import pymysql
 from websockets import InvalidHandshake, WebSocketProtocolError
 
@@ -33,20 +35,18 @@ class ForumBot(Client):
     # while there being no way to unclose it, forcing one to recreate
     # the whole thing.
     async def sane_connect(self):
-        self.gateway = await self._get_gateway()
-        await self._make_websocket()
+        self.ws = await DiscordWebSocket.from_client(self)
 
         while not self.is_closed:
-            msg = await self.ws.recv()
-            if msg is None:
-                if self.ws.close_code == 1012:
-                    await self.redirect_websocket(self.gateway)
-                    continue
-                else:
-                    # Connection was dropped, break out
-                    break
-
-            await self.received_message(msg)
+            try:
+                await self.ws.poll_event()
+            except ReconnectWebSocket:
+                logging.info('Reconnecting the websocket.')
+                self.ws = await DiscordWebSocket.from_client(self)
+            except ConnectionClosed as e:
+                # yield from self.close() # This should not be done..
+                if e.code != 1000:
+                    raise
 
     # This is a rather hackish way to get arround the problem of there
     # being no sane way to propogate exception from a thread to the
@@ -590,7 +590,7 @@ if __name__ == '__main__':
             loop.run_until_complete(bot.sane_connect())
 
         except (HTTPException, ClientError, GatewayNotFound,
-                InvalidHandshake, WebSocketProtocolError):
+                InvalidHandshake, WebSocketProtocolError, ConnectionClosed):
             logging.exception("Lost connection with Discord")
             loop.run_until_complete(sleep(10))
 
